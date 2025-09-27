@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # API
     api_title: str = "NeuralCache API"
-    api_version: str = "0.1.0"
+    api_version: str = "0.2.0"
     max_top_k: int = 100
     max_documents: int = 128
     max_text_length: int = 8192
