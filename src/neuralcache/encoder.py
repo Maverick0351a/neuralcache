@@ -14,7 +14,7 @@ import importlib
 import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeAlias
 
 import numpy as np
 
@@ -25,12 +25,10 @@ class SupportsEncode(Protocol):
     """Protocol describing the encode interface expected by callers."""
 
     # pragma: no cover - protocol definition
-    def encode(self, text: str) -> np.ndarray:
-        ...
+    def encode(self, text: str) -> np.ndarray: ...
 
     # pragma: no cover - protocol definition
-    def encode_batch(self, texts: Sequence[str]) -> np.ndarray:
-        ...
+    def encode_batch(self, texts: Sequence[str]) -> np.ndarray: ...
 
 
 @dataclass(slots=True)
@@ -119,7 +117,7 @@ def _to_float32(array_like: Sequence[float]) -> np.ndarray:
     return np.asarray(array_like, dtype=np.float32)
 
 
-VectorInput = Sequence[float] | np.ndarray
+VectorInput: TypeAlias = Sequence[float] | np.ndarray
 
 
 def _ensure_matrix(vectors: Sequence[VectorInput]) -> np.ndarray:

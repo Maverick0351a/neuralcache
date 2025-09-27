@@ -103,11 +103,7 @@ class Reranker:
         if q.size != doc_embeddings.shape[1]:
             # resize query vector via simple pad/truncate for compatibility
             target_dim = doc_embeddings.shape[1]
-            q = (
-                q[:target_dim]
-                if q.size > target_dim
-                else np.pad(q, (0, target_dim - q.size))
-            )
+            q = q[:target_dim] if q.size > target_dim else np.pad(q, (0, target_dim - q.size))
         dense = batched_cosine_sims(q, doc_embeddings)
 
         narr = self.narr.coherence(doc_embeddings)
@@ -132,8 +128,7 @@ class Reranker:
             if not selected:
                 return float(base[idx])
             sim_to_selected = max(
-                float(np.dot(doc_embeddings[idx], doc_embeddings[j]))
-                for j in selected
+                float(np.dot(doc_embeddings[idx], doc_embeddings[j])) for j in selected
             )
             return float(mmr_lam * base[idx] - (1.0 - mmr_lam) * sim_to_selected)
 

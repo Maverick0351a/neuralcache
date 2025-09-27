@@ -5,7 +5,7 @@ from neuralcache.rerank import Reranker
 from neuralcache.types import Document
 
 
-def test_basic_rerank_runs():
+def test_basic_rerank_runs() -> None:
     settings = Settings(narrative_dim=128)
     reranker = Reranker(settings=settings)
 

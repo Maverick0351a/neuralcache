@@ -97,6 +97,7 @@ else:  # pragma: no cover - exercised when prometheus_client is installed
         outcome = "success" if success else "failure"
         _FEEDBACK_EVENTS.labels(outcome=outcome).inc()
 
+
 __all__ = [
     "latest_metrics",
     "metrics_enabled",

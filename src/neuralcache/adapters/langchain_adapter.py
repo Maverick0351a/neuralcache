@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     from langchain_core.documents import Document as LCDocument
-except Exception:  # pragma: no cover - optional dependency
-    LCDocument = Any  # type: ignore
+else:
+    LCDocument = Any
+    try:
+        from langchain_core.documents import Document as _LCDocument
+    except Exception:  # pragma: no cover - optional dependency
+        pass
+    else:
+        LCDocument = _LCDocument
 
 from ..config import Settings
 from ..rerank import Reranker

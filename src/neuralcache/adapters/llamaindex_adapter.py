@@ -68,7 +68,4 @@ class NeuralCacheLlamaIndexReranker(BaseNodePostprocessor):
         q = self.reranker.encode_query(query)
 
         scored = self.reranker.score(q, nc_docs)
-        return [
-            NodeWithScore(node=nodes[int(sd.id)].node, score=sd.score)
-            for sd in scored
-        ]
+        return [NodeWithScore(node=nodes[int(sd.id)].node, score=sd.score) for sd in scored]

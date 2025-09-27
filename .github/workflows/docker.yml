@@ -38,5 +38,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/neuralcache:${{ steps.meta.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/neuralcache:latest
+            ghcr.io/${{ lower(github.repository_owner) }}/neuralcache:${{ steps.meta.outputs.tag }}
+            ghcr.io/${{ lower(github.repository_owner) }}/neuralcache:latest

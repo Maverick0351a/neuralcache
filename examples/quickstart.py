@@ -9,17 +9,11 @@ from neuralcache.types import Document
 docs = [
     Document(
         id="d1",
-        text=(
-            "Neural networks use layers of artificial neurons "
-            "to learn patterns."
-        ),
+        text=("Neural networks use layers of artificial neurons to learn patterns."),
     ),
     Document(
         id="d2",
-        text=(
-            "The Battle of Gettysburg was fought in 1863 during "
-            "the American Civil War."
-        ),
+        text=("The Battle of Gettysburg was fought in 1863 during the American Civil War."),
     ),
     Document(
         id="d3",
@@ -30,10 +24,7 @@ docs = [
     ),
     Document(
         id="d4",
-        text=(
-            "Stigmergy is a mechanism of indirect coordination "
-            "through the environment."
-        ),
+        text=("Stigmergy is a mechanism of indirect coordination through the environment."),
     ),
 ]
 
