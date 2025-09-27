@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from ..config import Settings
 from ..metrics import latest_metrics, metrics_enabled, observe_rerank
 from ..rerank import Reranker
-from ..types import Document, RerankRequest, ScoredDocument
+from ..types import RerankRequest, ScoredDocument
 from .server import app as legacy_app
 
 settings = Settings()
@@ -23,21 +23,14 @@ class BatchRerankRequest(BaseModel):
     requests: list[RerankRequest] = Field(default_factory=list)
 
 
-def _hash_embedding(text: str, dim: int) -> np.ndarray:
-    vec = np.zeros((dim,), dtype=np.float32)
-    for token in text.lower().split():
-        vec[hash(token) % dim] += 1.0
-    return vec
-
-
 def _resolve_query_embedding(req: RerankRequest) -> np.ndarray:
     if req.query_embedding is not None:
         return np.array(req.query_embedding, dtype=np.float32)
-    return _hash_embedding(req.query, settings.narrative_dim)
+    return reranker.encode_query(req.query)
 
 
 def _score_documents(req: RerankRequest) -> list[ScoredDocument]:
-    docs = [Document.model_validate(doc) for doc in req.documents]
+    docs = list(req.documents)
     query_embedding = _resolve_query_embedding(req)
     scored = reranker.score(query_embedding, docs, mmr_lambda=req.mmr_lambda)
     return scored[: min(req.top_k, len(scored))]

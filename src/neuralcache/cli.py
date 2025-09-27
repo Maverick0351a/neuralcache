@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import pathlib
 
-import numpy as np
 import typer
 
 from .config import Settings
@@ -25,11 +24,8 @@ def rerank(
     settings = Settings()
     r = Reranker(settings=settings)
 
-    # Build query embedding (hash trick for demo)
-    dim = settings.narrative_dim
-    q = np.zeros((dim,), dtype=np.float32)
-    for tok in query.lower().split():
-        q[hash(tok) % dim] += 1.0
+    # Build query embedding via configured encoder (hashing fallback)
+    q = r.encode_query(query)
 
     docs: list[Document] = []
     with pathlib.Path(docs_file).open(encoding="utf-8") as f:
@@ -40,8 +36,21 @@ def rerank(
                     id=obj["id"],
                     text=obj["text"],
                     metadata=obj.get("metadata", {}),
+                    embedding=obj.get("embedding"),
                 )
             )
+
+    if len(docs) > settings.max_documents:
+        raise typer.BadParameter(
+            f"Document count {len(docs)} exceeds limit of {settings.max_documents}",
+            param_hint="docs_file",
+        )
+
+    if top_k > settings.max_top_k:
+        raise typer.BadParameter(
+            f"top_k {top_k} exceeds limit of {settings.max_top_k}",
+            param_hint="top_k",
+        )
 
     scored = r.score(q, docs)
     for sd in scored[:top_k]:

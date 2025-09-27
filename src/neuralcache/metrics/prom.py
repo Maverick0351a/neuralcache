@@ -28,6 +28,9 @@ except Exception:  # pragma: no cover - prefer graceful fallback
     def latest_metrics() -> tuple[str, bytes] | None:
         return None
 
+    def record_feedback(success: bool) -> None:
+        return None
+
 else:  # pragma: no cover - exercised when prometheus_client is installed
     PROMETHEUS_AVAILABLE = True
     _REGISTRY = CollectorRegistry()
@@ -57,6 +60,12 @@ else:  # pragma: no cover - exercised when prometheus_client is installed
         labelnames=("endpoint", "outcome"),
         registry=_REGISTRY,
     )
+    _FEEDBACK_EVENTS = Counter(
+        "neuralcache_feedback_events_total",
+        "Feedback outcomes by success flag.",
+        labelnames=("outcome",),
+        registry=_REGISTRY,
+    )
 
     def metrics_enabled() -> bool:
         return True
@@ -84,9 +93,14 @@ else:  # pragma: no cover - exercised when prometheus_client is installed
     def latest_metrics() -> tuple[str, bytes] | None:
         return CONTENT_TYPE_LATEST, generate_latest(_REGISTRY)
 
+    def record_feedback(success: bool) -> None:
+        outcome = "success" if success else "failure"
+        _FEEDBACK_EVENTS.labels(outcome=outcome).inc()
+
 __all__ = [
     "latest_metrics",
     "metrics_enabled",
     "observe_rerank",
     "record_context_use",
+    "record_feedback",
 ]

@@ -7,6 +7,7 @@ from contextlib import suppress
 import numpy as np
 
 from .similarity import safe_normalize
+from .storage.sqlite_state import SQLiteState
 
 
 class NarrativeTracker:
@@ -16,14 +17,27 @@ class NarrativeTracker:
         alpha: float = 0.01,
         success_gate: float = 0.5,
         path: str = "narrative.json",
+        backend: str = "sqlite",
+        storage_dir: str | None = None,
+        sqlite_state: SQLiteState | None = None,
     ) -> None:
         self.alpha = float(alpha)
         self.success_gate = float(success_gate)
-        self.path = path
+        base_path = pathlib.Path(storage_dir or ".")
+        self.backend = backend.lower()
+        self.path = (base_path / path).as_posix()
+        self._sqlite = sqlite_state
         self.v = np.zeros((dim,), dtype=np.float32)
         self._load()
 
     def _load(self) -> None:
+        if self.backend == "sqlite" and self._sqlite is not None:
+            with suppress(Exception):
+                stored = self._sqlite.load_narrative()
+                if stored is not None and stored.size == self.v.size:
+                    self.v = stored.astype(np.float32)
+            return
+
         path = pathlib.Path(self.path)
         if not path.exists():
             return
@@ -36,10 +50,17 @@ class NarrativeTracker:
                 self.v = arr
 
     def _save(self) -> None:
+        if self.backend == "sqlite" and self._sqlite is not None:
+            with suppress(Exception):
+                self._sqlite.save_narrative(self.v)
+            return
+
         path = pathlib.Path(self.path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with suppress(Exception), path.open("w", encoding="utf-8") as handle:
             json.dump({"v": self.v.tolist()}, handle)
+        with suppress(Exception):
+            path.chmod(0o600)
 
     def update(self, doc_embedding: np.ndarray, success: float) -> None:
         if success < self.success_gate:

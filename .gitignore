@@ -13,3 +13,6 @@ build/
 .coverage
 htmlcov/
 "*.sqlite3"
+storage/
+pheromones.json
+narrative.json
