@@ -1,10 +1,10 @@
 # NeuralCache — Narrative- & Stigmergy-Aware Reranker for RAG
 
-[![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
-[![Lint](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml)
-[![Tests](https://github.com/Maverick0351a/neuralcache/actions/workflows/tests.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/tests.yml)
-[![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
-[![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
+[![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
+[![Lint](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml)
+[![Tests](https://github.com/Maverick0351a/neuralcache/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/tests.yml)
+[![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
+[![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
 
 NeuralCache is a drop-in reranker for Retrieval-Augmented Generation (RAG) that learns which context the model actually uses—then steers future retrieval toward that context using:
 
