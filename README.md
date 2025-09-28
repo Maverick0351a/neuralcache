@@ -32,6 +32,7 @@ It plugs into your existing stack (Pinecone/Weaviate/Qdrant, LangChain/LlamaInde
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
+- [Changelog](#changelog)
 
 ## Features
 
@@ -241,6 +242,10 @@ Open a PR with a clear description, tests, and passing CI.
 ## License
 
 Apache-2.0 for this repository. The Cognitive Tetrad architecture and related research remain proprietary and are not part of this codebase.
+
+## Changelog
+
+Release history and notable changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## CI & Workflows
 
