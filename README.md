@@ -10,6 +10,12 @@
 [![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
 [![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
 
+> ⚡ One-liner quickstart—install, launch, and hit the API in seconds:
+>
+> ```bash
+> pip install neuralcache && uvicorn neuralcache.api.server:app --port 8080 --reload & sleep 3 && curl -s -X POST http://127.0.0.1:8080/rerank -H "Content-Type: application/json" -d '{"query":"What is stigmergy?","documents":[{"id":"a","text":"Stigmergy is indirect coordination via shared context."},{"id":"b","text":"Vector DBs store embeddings for retrieval."}],"top_k":2}' | python -m json.tool
+> ```
+
 NeuralCache is a drop-in reranker for Retrieval-Augmented Generation (RAG) that learns which context the model actually uses—then steers future retrieval toward that context using:
 
 - Dense similarity (semantic closeness)
