@@ -2,508 +2,416 @@
 	<img src="assets/Carnot.svg" alt="Carnot Engine" width="280" />
 </p>
 
-# NeuralCache — Narrative- & Stigmergy-Aware Reranker for RAG
+# NeuralCache 🧠⚡
+*Adaptive reranker for Retrieval-Augmented Generation (RAG)*
 
 [![PyPI](https://img.shields.io/pypi/v/neuralcache.svg)](https://pypi.org/project/neuralcache/)
-[![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
-[![Lint](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml)
-[![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
-[![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
+[![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
+[![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
+[![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/Maverick0351a/neuralcache?style=social)](https://github.com/Maverick0351a/neuralcache/stargazers)
 
-> ⚡ One-liner quickstart—install, launch, and hit the API in seconds:
->
-> ```bash
-> pip install neuralcache && uvicorn neuralcache.api.server:app --port 8080 --reload & sleep 3 && curl -s -X POST http://127.0.0.1:8080/rerank -H "Content-Type: application/json" -d '{"query":"What is stigmergy?","documents":[{"id":"a","text":"Stigmergy is indirect coordination via shared context."},{"id":"b","text":"Vector DBs store embeddings for retrieval."}],"top_k":2}' | python -m json.tool
-> ```
+NeuralCache is a lightweight reranker for RAG pipelines that *actually remembers what helped*. It blends dense semantic similarity with a narrative memory of past wins and stigmergic pheromones that reward helpful passages while decaying stale ones—then spices in MMR diversity and ε-greedy exploration. The result: more relevant context for your LLM without rebuilding your stack.
 
-NeuralCache is a drop-in reranker for Retrieval-Augmented Generation (RAG) that learns which context the model actually uses—then steers future retrieval toward that context using:
+> This repository open-sources the NeuralCache reranker. The broader “Cognitive Tetrad” engine remains proprietary IP and is not included here.
 
-- Dense similarity (semantic closeness)
-- Narrative coherence (EMA of successful context; continuity across turns)
-- Stigmergic pheromones (exposure-aware reinforcement with decay)
-- MMR diversity and ε-greedy exploration to avoid filter bubbles
+---
 
-It plugs into your existing stack (Pinecone/Weaviate/Qdrant, LangChain/LlamaIndex, any embedding model) and improves Context-Use@K with single-digit millisecond overhead at small K.
+## ⚡ 60-second quickstart
 
-> This repository open-sources the reranker. The broader “Cognitive Tetrad” engine remains proprietary IP and is not included here.
+```bash
+# 1. Install
+pip install neuralcache
 
-## Contents
+# 2. Launch the API (Ctrl+C to stop)
+uvicorn neuralcache.api.server:app --port 8080 --reload
 
-- [Features](#features)
-- [Quickstart](#quickstart)
-- [API](#api)
-- [CLI](#cli)
-- [Adapters](#adapters)
-- [Configuration](#configuration)
-- [Persistence](#persistence)
-- [Metrics](#metrics)
-- [Repository Layout](#repository-layout)
-- [Performance Goals](#performance-goals)
-- [Security & Privacy](#security--privacy)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
-- [Changelog](#changelog)
-
-## Features
-
-- Rerank API & CLI with clean Pydantic v2 models
-- NarrativeTracker (success-gated EMA) for long-horizon coherence
-- PheromoneStore with exponential decay & exposure penalty
-- MMR + ε-greedy to balance relevance, diversity, and exploration
-- Adapters for LangChain & LlamaIndex (import-guarded)
-- Ruff (lint+format), mypy, pytest, pre-commit
-- Dockerfile and GitHub Actions for CI, tests, releases, and images
-
-## Quickstart
-
-### 1) Install (dev)
-
-```powershell
-# Windows PowerShell (VS Code terminal)
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -U pip
-pip install -e .[dev,test]
-pre-commit install
-pytest
+# 3. Hit the reranker
+curl -s -X POST http://127.0.0.1:8080/rerank \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query":"What is stigmergy?",
+    "documents":[
+      {"id":"a","text":"Stigmergy is indirect coordination via shared context."},
+      {"id":"b","text":"Vector DBs store embeddings for retrieval."}
+    ],
+    "top_k":2
+  }' | python -m json.tool
 ```
 
-### 2) Run the API
+Prefer a single command? 👇
 
-```powershell
-uvicorn neuralcache.api.server:app --reload --port 8080
+```bash
+pip install neuralcache && \
+uvicorn neuralcache.api.server:app --port 8080 --reload & \
+server_pid=$! && sleep 3 && \
+curl -s -X POST http://127.0.0.1:8080/rerank -H "Content-Type: application/json" \
+     -d '{"query":"What is stigmergy?","documents":[{"id":"a","text":"Stigmergy is indirect coordination."},{"id":"b","text":"Vector DBs store embeddings."}],"top_k":2}' | python -m json.tool && \
+kill $server_pid
 ```
 
-- Health: <http://localhost:8080/healthz>
-- Rerank: `POST /rerank`
-- Feedback: `POST /feedback`
+---
 
-### 3) Try the CLI
+## Why teams choose NeuralCache
 
-```powershell
-# Prepare a JSONL corpus (one doc per line)
-echo {"id":"1","text":"Neural networks learn patterns"} > docs.jsonl
-echo {"id":"2","text":"Stigmergy is indirect coordination"} >> docs.jsonl
-echo {"id":"3","text":"Vector DBs store embeddings"} >> docs.jsonl
+- **Drop-in reranker** for any retriever that can send JSON. Works with Pinecone, Weaviate, Qdrant, Chroma—or your own Postgres table.
+- **Narrative memory (EMA)** keeps track of passages that consistently helped users, biasing future reranks toward them.
+- **Stigmergic pheromones** reward useful documents but decay over time, preventing filter bubbles.
+- **MMR + ε-greedy** introduces diversity without tanking relevance.
+- **Zero external dependencies by default.** Uses a hashing trick for embeddings so you can see results instantly, but slots in any vector model when you’re ready.
+- **Adapters included.** LangChain and LlamaIndex adapters ship in `neuralcache.adapters` and only import their extras when you use them.
+- **CLI + REST API + FastAPI docs** give you multiple ways to integrate and debug.
 
-# Rerank
-neuralcache "What is stigmergy?" docs.jsonl --top-k 3
-```
+### Use cases
 
-## API
+- *Customer support copilots* → surface articles with the exact resolution steps.
+- *Internal knowledge bases* → highlight documents that past agents actually referenced.
+- *Vertical SaaS (legal/health/finance)* → pair compliance-ready snippets with LLM summaries.
+- *Evaluation harnesses* → measure and tune Context-Use@K uplift before going live.
 
-### `POST /rerank`
+---
 
-Request (excerpt):
+## How it works
 
-```json
-{
-	"query": "How do stigmergic systems coordinate?",
-	"documents": [
-		{"id": "d1", "text": "Stigmergy is indirect coordination via shared environment."},
-		{"id": "d2", "text": "A vector DB stores embeddings for retrieval."}
-	],
-	"top_k": 3
-}
-```
-
-Response (excerpt):
-
-```json
-{
-	"results": [
-		{"id": "d1", "score": 0.87},
-		{"id": "d2", "score": 0.32}
-	],
-	"meta": {
-		"strategy": {"mmr": true, "epsilon_greedy": 0.05},
-		"weights": {"dense": 0.6, "narrative": 0.3, "pheromone": 0.1}
-	}
-}
-```
-
-### `POST /feedback`
-
-Provide reinforcement signals (e.g., user selected doc contributed to a correct answer):
-
-```json
-{
-	"query": "What is stigmergy?",
-	"selected_doc_ids": ["d1"],
-	"success": 1.0
-}
-```
-
-### `GET /metrics`
-
-Lightweight counters (requests, successes) and placeholder Context-Use@K.
-
-### `GET /healthz`
-
-Liveness check.
-
-## CLI
-
-```powershell
-neuralcache "<query>" docs.jsonl --top-k 5 --epsilon 0.05 --mmr-lambda 0.3
-```
-
-- Inputs: JSONL with `{"id": "...", "text": "..."}` per line (optional embedding)
-- Outputs: Ranked JSON to stdout
-
-## Adapters
-
-Adapters are optional (import-guarded). Install their libs only if you use them.
-
-- LangChain: `NeuralCacheLangChainReranker`
-- LlamaIndex: `NeuralCacheLlamaIndexReranker`
-
-## Configuration
-
-All knobs are managed via `pydantic-settings` and/or environment variables (prefix `NC_`). Defaults are in `neuralcache/config.py`.
-
-| Variable | Meaning | Default |
+| Signal | What it captures | Why it matters |
 | --- | --- | --- |
-| `NC_WEIGHT_DENSE_SIM` | Weight for dense similarity term | `0.6` |
-| `NC_WEIGHT_NARRATIVE` | Weight for narrative coherence | `0.3` |
-| `NC_WEIGHT_PHEROMONE` | Weight for pheromone bonus | `0.1` |
-| `NC_EPSILON_GREEDY` | Exploration probability | `0.05` |
-| `NC_MMR_LAMBDA` | MMR trade-off (relevance vs diversity) | `0.3` |
-| `NC_NARRATIVE_ALPHA` | EMA update rate (narrative) | `0.005` |
-| `NC_PHEROMONE_HALF_LIFE_S` | Decay half-life (seconds) | `86400` |
-| `NC_STORAGE_DIR` | Persistence directory | `./` |
+| **Dense similarity** | Cosine distance over embeddings (hash-based fallback out of the box) | Makes sure obviously relevant passages rank high. |
+| **Narrative EMA** | Exponential moving average of successful context windows | Remembers story arcs across multi-turn conversations. |
+| **Stigmergic pheromones** | Exposure-aware reinforcement with decay | Rewards docs that helped *recently* while fading stale ones. |
+| **MMR diversity** | Maximal Marginal Relevance | Reduces redundancy and surfaces complementary evidence. |
+| **ε-greedy exploration** | Occasional exploration of long-tail docs | Keeps fresh signals flowing so the model doesn’t get stuck. |
 
-Embeddings: By default we include a hashing-trick placeholder for easy local demos. In production, pass real embeddings via your retriever, or integrate a model call in your pipeline.
+All of this is orchestrated by `neuralcache.rerank.Reranker`, configurable through [`Settings`](src/neuralcache/config.py) or environment variables (`NEURALCACHE_*`).
 
-## Persistence
+---
 
-Narrative and Pheromones persist as SQLite databases or JSON files (fallback) in `NC_STORAGE_DIR`.
+## Integrations & interfaces
 
-For multi-process or multi-instance deployments, keep the shared SQLite directory on durable storage with proper file permissions.
+- **REST API** (`uvicorn neuralcache.api.server:app`) with `/rerank`, `/feedback`, `/metrics`, and `/healthz` endpoints.
+- **CLI** (`neuralcache "<query>" docs.jsonl --top-k 5`) for quick experiments and scripting.
+- **LangChain adapter**: `from neuralcache.adapters import NeuralCacheLangChainReranker`
+- **LlamaIndex adapter**: `from neuralcache.adapters import NeuralCacheLlamaIndexReranker`
 
-## Metrics
+See [`examples/quickstart.py`](examples/quickstart.py) for an end-to-end script.
 
-- Context-Use@K proxy (lexical overlap) included
-- Prometheus metrics for rerank latency, request rates, and feedback outcomes
-- Extend with semantic overlap or OpenTelemetry exporters in production
+---
 
-## Repository Layout
+## Configuration essentials
+
+| Env var | Purpose | Default |
+| --- | --- | --- |
+| `NEURALCACHE_WEIGHT_DENSE` | Weight on dense similarity | `1.0` |
+| `NEURALCACHE_WEIGHT_NARRATIVE` | Weight on narrative memory | `0.6` |
+| `NEURALCACHE_WEIGHT_PHEROMONE` | Weight on pheromone signal | `0.3` |
+| `NEURALCACHE_MAX_DOCUMENTS` | Safety cap on rerank set size | `128` |
+| `NEURALCACHE_MAX_TEXT_LENGTH` | Hard limit on document length (characters) | `8192` |
+| `NEURALCACHE_STORAGE_DIR` | Where SQLite + JSON state is stored | `storage/` |
+
+Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation.
+
+Persistence happens automatically using SQLite (or JSON fallback) so narrative and pheromone stores survive restarts. Point `NEURALCACHE_STORAGE_DIR` at shared storage for multi-worker deployments.
+
+---
+
+## Evaluation: prove the uplift
+
+We ship `scripts/eval_context_use.py` to measure Context-Use@K on any JSONL dataset (query, docs, answer). It can compare a baseline retriever with a NeuralCache-powered candidate.
+
+```bash
+python scripts/eval_context_use.py \
+  --api http://localhost:8080 \
+  --data data/sample_rag.jsonl \
+  --out reports/neuralcache_eval.csv \
+  --top-k 5
+
+# Optional: compare against another API host
+python scripts/eval_context_use.py \
+  --api http://localhost:8000 --data data/sample_rag.jsonl \
+  --compare-api http://localhost:8080 --out reports/compare.csv
+```
+
+Example output (toy dataset):
+
+```
+Eval complete in 4.82s | Baseline Context-Use@5: 9/20 | NeuralCache: 13/20
+```
+
+Use the generated CSV to inspect which queries improved, regressions, and latency statistics.
+
+---
+
+## Project layout
 
 ```
 neuralcache/
-├─ pyproject.toml
-├─ README.md
-├─ Dockerfile
-├─ Makefile
-├─ .pre-commit-config.yaml
-├─ src/
-│  └─ neuralcache/
-│     ├─ config.py
-│     ├─ types.py
-│     ├─ similarity.py
-│     ├─ narrative.py
-│     ├─ pheromone.py
-│     ├─ rerank.py
-│     ├─ encoder.py
-│     ├─ api/
-│     │  └─ server.py
-│     ├─ adapters/
-│     │  ├─ langchain_adapter.py
-│     │  └─ llamaindex_adapter.py
-│     └─ cli.py
-├─ tests/
-│  └─ test_rerank.py
-├─ examples/
-│  └─ quickstart.py
-└─ .github/
-	 └─ workflows/
-			└─ (CI, lint, tests, release, docker, codeql)
+├─ assets/                # Logos, diagrams, and other static media
+├─ examples/              # Quickstart notebooks and scripts
+├─ scripts/               # Evaluation + operational tooling
+├─ src/neuralcache/
+│  ├─ api/                # FastAPI app exposing REST endpoints
+│  ├─ adapters/           # LangChain + LlamaIndex integrations
+│  ├─ metrics/            # Context-Use@K helpers & Prometheus hooks
+│  ├─ narrative.py        # Narrative memory tracker
+│  ├─ pheromone.py        # Pheromone store with decay/exposure logic
+│  ├─ rerank.py           # Core reranking orchestrator
+│  └─ config.py           # Pydantic Settings (env + .env aware)
+├─ tests/                 # Pytest suite (unit + adapter sanity)
+└─ .github/workflows/     # CI, lint, release, docker, code scanning
 ```
 
-## Performance Goals
+---
 
-- p50 < 10 ms for `K ≤ 32` in Python (achievable with vectorized NumPy)
-- Optional: move hot loops to Numba or Rust (FFI) if needed
+## Metrics & observability
 
-## Security & Privacy
+- `/metrics` exposes Prometheus counters for request volume, success rate, and Context-Use@K proxy.
+- Structured logging (via `rich` + standard logging) shows rerank decisions with scores.
+- Extend telemetry by dropping in OpenTelemetry exporters or shipping events to your own observability stack.
 
-- No documents persist beyond transient rerank inputs by default
-- Narrative/pheromone stores contain aggregate signals only (no raw content)
-- Run behind your gateway; enable HTTPS and per-tenant isolation for multi-tenant hosting
+---
 
 ## Roadmap
 
 - ✅ SQLite persistence (drop-in)
 - ✅ Batch `/rerank` endpoint
+- ✅ LangChain + LlamaIndex adapters
 - ☐ Semantic Context-Use@K metric
-- ☐ Prometheus/OpenTelemetry exporter extensions
-- ☐ Rust/Numba core (optional acceleration)
+- ☐ Prometheus/OpenTelemetry exporters
+- ☐ Optional Rust / Numba core for hot loops
 
-## Contributing
+Have ideas? [Open an issue](https://github.com/Maverick0351a/neuralcache/issues/new/choose) or grab a ticket.
 
-```powershell
+---
+
+## Contributing & community
+
+```bash
 pip install -e .[dev,test]
 pre-commit install
 ruff check && mypy && pytest
 ```
 
-Open a PR with a clear description, tests, and passing CI.
+- Look for [good first issues](https://github.com/Maverick0351a/neuralcache/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+- Add test coverage for user-visible changes.
+- PRs with docs, demos, and eval improvements are extra appreciated.
+
+Optionally, join the discussion in **#neuralcache** on Discord (coming soon—watch this space).
+
+---
 
 ## License
 
-Apache-2.0 for this repository. The Cognitive Tetrad architecture and related research remain proprietary and are not part of this codebase.
+Apache-2.0. The NeuralCache reranker is open source; the broader Cognitive Tetrad engine remains proprietary.
 
-## Changelog
+---
 
-Release history and notable changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+## Automation details
 
-## CI & Workflows
+Need to replicate our CI? Expand the sections below for workflow templates.
 
-Copy the workflow files from this README into `.github/workflows/` (create the folder if it does not exist) to enable CI, linting, scheduled tests, releases, and Docker image publishing.
-
-### `ci.yml` — Build, Lint, Type-check, Test (matrix)
+<details>
+<summary><code>.github/workflows/ci.yml</code> — lint, type-check, test</summary>
 
 ```yaml
 name: CI
 
 on:
-	pull_request:
-	push:
-		branches: [ main ]
+  pull_request:
+  push:
+    branches: [ main ]
 
 jobs:
-	ci:
-		runs-on: ubuntu-latest
-		strategy:
-			matrix:
-				python-version: ['3.11', '3.12']
-		steps:
-			- uses: actions/checkout@v4
-
-			- name: Setup Python
-				uses: actions/setup-python@v5
-				with:
-					python-version: ${{ matrix.python-version }}
-
-			- name: Cache pip
-				uses: actions/cache@v4
-				with:
-					path: ~/.cache/pip
-					key: pip-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
-					restore-keys: |
-						pip-${{ runner.os }}-${{ matrix.python-version }}-
-
-			- name: Install
-				run: |
-					python -m pip install --upgrade pip
-					pip install -e .[dev,test]
-
-			- name: Ruff (lint + format check)
-				run: ruff check .
-
-			- name: Type-check (mypy)
-				run: mypy src
-
-			- name: Pytest
-				run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml
-
-			- name: Upload coverage artifact
-				uses: actions/upload-artifact@v4
-				with:
-					name: coverage-xml
-					path: coverage.xml
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-${{ runner.os }}-${{ matrix.python-version }}-
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+      - name: Ruff (lint + format check)
+        run: ruff check .
+      - name: Type-check (mypy)
+        run: mypy src
+      - name: Pytest
+        run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
 ```
 
-### `lint.yml` — Pre-commit on all files (fast feedback)
+</details>
+
+<details>
+<summary><code>.github/workflows/lint.yml</code> — pre-commit</summary>
 
 ```yaml
 name: Lint
 
 on:
-	pull_request:
-	push:
-		branches: [ main ]
+  pull_request:
+  push:
+    branches: [ main ]
 
 jobs:
-	precommit:
-		runs-on: ubuntu-latest
-		steps:
-			- uses: actions/checkout@v4
-
-			- uses: actions/setup-python@v5
-				with:
-					python-version: '3.11'
-
-			- name: Install
-				run: |
-					python -m pip install --upgrade pip
-					pip install -e .[dev]
-
-			- name: Run pre-commit
-				run: |
-					pre-commit run --all-files
+  precommit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run pre-commit
+        run: pre-commit run --all-files
 ```
 
-### `tests.yml` — Focused test job with coverage badge
+</details>
+
+<details>
+<summary><code>.github/workflows/tests.yml</code> — scheduled coverage</summary>
 
 ```yaml
 name: Tests
 
 on:
-	workflow_dispatch:
-	schedule:
-		- cron: '0 7 * * *'  # daily @ 07:00 UTC
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * *"  # daily @ 07:00 UTC
 
 jobs:
-	tests:
-		runs-on: ubuntu-latest
-		steps:
-			- uses: actions/checkout@v4
-
-			- uses: actions/setup-python@v5
-				with:
-					python-version: '3.11'
-
-			- name: Install
-				run: |
-					python -m pip install --upgrade pip
-					pip install -e .[test]
-
-			- name: Pytest
-				run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[test]
+      - name: Pytest
+        run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml
 ```
 
-### `release.yml` — Build & publish to PyPI on tagged release
+</details>
 
-> Requires `PYPI_API_TOKEN` secret.
+<details>
+<summary><code>.github/workflows/release.yml</code> — PyPI publish</summary>
 
 ```yaml
 name: Release
 
 on:
-	push:
-		tags:
-			- 'v*.*.*'
+  push:
+    tags:
+      - "v*.*.*"
 
 jobs:
-	pypi:
-		runs-on: ubuntu-latest
-		steps:
-			- uses: actions/checkout@v4
-			- uses: actions/setup-python@v5
-				with:
-					python-version: '3.11'
-
-			- name: Build sdist & wheel
-				run: |
-					python -m pip install --upgrade pip build
-					python -m build
-
-			- name: Publish to PyPI
-				uses: pypa/gh-action-pypi-publish@release/v1
-				with:
-					password: ${{ secrets.PYPI_API_TOKEN }}
+  pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build sdist & wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
 ```
 
-### `docker.yml` — Build & push to GHCR (tags & main)
+</details>
 
-> Ensure workflow permissions grant `packages: write`.
+<details>
+<summary><code>.github/workflows/docker.yml</code> — GHCR images</summary>
 
 ```yaml
 name: Docker
 
 on:
-	push:
-		branches: [ main ]
-		tags:
-			- 'v*.*.*'
+  push:
+    branches: [ main ]
+    tags:
+      - "v*.*.*"
 
 jobs:
-	docker:
-		runs-on: ubuntu-latest
-		permissions:
-			contents: read
-			packages: write
-		steps:
-			- uses: actions/checkout@v4
-
-			- name: Login to GHCR
-				uses: docker/login-action@v3
-				with:
-					registry: ghcr.io
-					username: ${{ github.actor }}
-					password: ${{ secrets.GITHUB_TOKEN }}
-
-			- name: Extract version
-				id: meta
-				run: |
-					REF="${GITHUB_REF##*/}"
-					if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-						echo "tag=$REF" >> $GITHUB_OUTPUT
-					else
-						echo "tag=latest" >> $GITHUB_OUTPUT
-					fi
-
-			- name: Build & push
-				uses: docker/build-push-action@v6
-				with:
-					context: .
-					push: true
-					tags: |
-						ghcr.io/${{ github.repository_owner }}/neuralcache:${{ steps.meta.outputs.tag }}
-						ghcr.io/${{ github.repository_owner }}/neuralcache:latest
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract version
+        id: meta
+        run: |
+          REF="${GITHUB_REF##*/}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=$REF" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/neuralcache:${{ steps.meta.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/neuralcache:latest
 ```
 
-### `codeql.yml` — Code scanning (optional)
+</details>
 
-```yaml
-name: CodeQL
-
-on:
-	push:
-		branches: [ main ]
-	pull_request:
-	schedule:
-		- cron: '0 3 * * 6'
-
-jobs:
-	analyze:
-		permissions:
-			security-events: write
-			actions: read
-			contents: read
-		uses: github/codeql-action/.github/workflows/codeql.yml@v3
-		with:
-			languages: python
-```
-
-### `.github/dependabot.yml`
+<details>
+<summary><code>.github/dependabot.yml</code></summary>
 
 ```yaml
 version: 2
 updates:
-	- package-ecosystem: "pip"
-		directory: "/"
-		schedule:
-			interval: "weekly"
-		open-pull-requests-limit: 5
-	- package-ecosystem: "github-actions"
-		directory: "/"
-		schedule:
-			interval: "weekly"
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
 ```
 
-## Repo Setup Checklist
+</details>
 
-- [ ] Create the workflow YAMLs above in `.github/workflows/`
-- [ ] Add `.github/dependabot.yml`
-- [ ] Ensure `.pre-commit-config.yaml` exists (Ruff, mypy, EOF fixer, trailing whitespace)
-- [ ] Run once locally: `pre-commit run --all-files`
-- [ ] Add README badges (they turn green after the first successful runs)
-- [ ] Configure secrets: `PYPI_API_TOKEN` (if publishing to PyPI)
-- [ ] Optionally enable branch protection requiring CI/Lint/Tests
-- [ ] Tag releases `vX.Y.Z` to trigger PyPI & Docker workflows
-- [ ] Install dev tooling locally: `pip install -e .[dev,test]`
-- [ ] Enable hooks via `pre-commit install`
-- [ ] Validate locally with `ruff check && mypy && pytest`
+---
+
+## Support the project
+
+If NeuralCache saves you time, consider starring the repo or sharing a demo with the community. Contributions, bug reports, and evaluation results are the best way to help the project grow.
