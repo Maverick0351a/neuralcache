@@ -1,5 +1,4 @@
 import numpy as np
-
 from neuralcache.config import Settings
 from neuralcache.rerank import Reranker
 from neuralcache.types import Document

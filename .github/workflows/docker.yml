@@ -31,6 +31,7 @@ jobs:
           else
             echo "tag=latest" >> $GITHUB_OUTPUT
           fi
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
 
       - name: Build & push
         uses: docker/build-push-action@v6
@@ -38,5 +39,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ lower(github.repository_owner) }}/neuralcache:${{ steps.meta.outputs.tag }}
-            ghcr.io/${{ lower(github.repository_owner) }}/neuralcache:latest
+            ghcr.io/${{ steps.meta.outputs.owner }}/neuralcache:${{ steps.meta.outputs.tag }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/neuralcache:latest
