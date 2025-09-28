@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict, deque
+from typing import Any
 
 import numpy as np
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
@@ -21,6 +22,26 @@ _feedback_cache: OrderedDict[str, list[ScoredDocument]] = OrderedDict()
 _feedback_lock = threading.Lock()
 _rate_lock = threading.Lock()
 _request_times: deque[float] = deque()
+
+
+def _build_gating_overrides(req: RerankRequest) -> dict[str, object] | None:
+    overrides: dict[str, object] = {}
+    if req.gating_mode is not None:
+        overrides["gating_mode"] = req.gating_mode
+    if req.gating_threshold is not None:
+        overrides["gating_threshold"] = float(req.gating_threshold)
+    if req.gating_min_candidates is not None:
+        overrides["gating_min_candidates"] = int(req.gating_min_candidates)
+    if req.gating_max_candidates is not None:
+        overrides["gating_max_candidates"] = int(req.gating_max_candidates)
+    if req.gating_entropy_temp is not None:
+        overrides["gating_entropy_temp"] = float(req.gating_entropy_temp)
+    return overrides or None
+
+
+def _extract_gating_debug(payload: dict[str, Any]) -> dict[str, Any] | None:
+    gating_debug = payload.get("gating")
+    return gating_debug if isinstance(gating_debug, dict) else None
 
 
 def _require_api_key(
@@ -118,18 +139,8 @@ async def rerank(
     start = time.perf_counter()
     status_label = "success"
     try:
-        overrides = {
-            k: v
-            for k, v in {
-                "gating_mode": req.gating_mode,
-                "gating_threshold": req.gating_threshold,
-                "gating_min_candidates": req.gating_min_candidates,
-                "gating_max_candidates": req.gating_max_candidates,
-                "gating_entropy_temp": req.gating_entropy_temp,
-            }.items()
-            if v is not None
-        }
-        debug_payload: dict[str, object] = {}
+        overrides = _build_gating_overrides(req)
+        debug_payload: dict[str, Any] = {}
         if req.query_embedding is not None:
             q = np.array(req.query_embedding, dtype=np.float32)
         else:
@@ -139,13 +150,13 @@ async def rerank(
             list(req.documents),
             mmr_lambda=req.mmr_lambda,
             query_text=req.query,
-            overrides=overrides or None,
+            overrides=overrides,
             debug=debug_payload,
         )
         limited = scored[: min(req.top_k, len(scored))]
         _remember_scored(limited)
         payload = [doc.model_dump() for doc in limited]
-        debug_model = RerankDebug(gating=debug_payload.get("gating"))
+        debug_model = RerankDebug(gating=_extract_gating_debug(debug_payload))
         return JSONResponse({"results": payload, "debug": debug_model.model_dump()})
     except HTTPException:
         status_label = "error"
@@ -186,18 +197,8 @@ async def rerank_batch(
         for req in batch:
             _validate_request(req)
             total_docs += len(req.documents)
-            overrides = {
-                k: v
-                for k, v in {
-                    "gating_mode": req.gating_mode,
-                    "gating_threshold": req.gating_threshold,
-                    "gating_min_candidates": req.gating_min_candidates,
-                    "gating_max_candidates": req.gating_max_candidates,
-                    "gating_entropy_temp": req.gating_entropy_temp,
-                }.items()
-                if v is not None
-            }
-            debug_payload: dict[str, object] = {}
+            overrides = _build_gating_overrides(req)
+            debug_payload: dict[str, Any] = {}
             if req.query_embedding is not None:
                 q = np.array(req.query_embedding, dtype=np.float32)
             else:
@@ -207,13 +208,13 @@ async def rerank_batch(
                 list(req.documents),
                 mmr_lambda=req.mmr_lambda,
                 query_text=req.query,
-                overrides=overrides or None,
+                overrides=overrides,
                 debug=debug_payload,
             )
             limited = scored[: min(req.top_k, len(scored))]
             _remember_scored(limited)
             payload = [doc.model_dump() for doc in limited]
-            debug_model = RerankDebug(gating=debug_payload.get("gating"))
+            debug_model = RerankDebug(gating=_extract_gating_debug(debug_payload))
             results.append({"results": payload, "debug": debug_model.model_dump()})
         return JSONResponse(results)
     except HTTPException:

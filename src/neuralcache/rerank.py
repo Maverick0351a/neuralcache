@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -15,6 +16,34 @@ from .pheromone import PheromoneStore
 from .similarity import batched_cosine_sims, embed_corpus, safe_normalize
 from .storage.sqlite_state import SQLiteState
 from .types import Document, ScoredDocument
+
+
+def _safe_float(value: Any, default: float) -> float:
+    if value is None:
+        return float(default)
+    if isinstance(value, (float, int)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return float(default)
+    return float(default)
+
+
+def _safe_int(value: Any, default: int) -> int:
+    if value is None:
+        return int(default)
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return int(default)
+    return int(default)
 
 
 class Reranker:
@@ -162,11 +191,24 @@ class Reranker:
         dense = batched_cosine_sims(q, doc_embeddings)
 
         overrides = overrides or {}
-        mode = (overrides.get("gating_mode") or self.settings.gating_mode)
-        threshold = float(overrides.get("gating_threshold", self.settings.gating_threshold))
-        min_c = int(overrides.get("gating_min_candidates", self.settings.gating_min_candidates))
-        max_c = int(overrides.get("gating_max_candidates", self.settings.gating_max_candidates))
-        temp = float(overrides.get("gating_entropy_temp", self.settings.gating_entropy_temp))
+        mode_override = overrides.get("gating_mode")
+        mode = mode_override if isinstance(mode_override, str) else self.settings.gating_mode
+        threshold = _safe_float(
+            overrides.get("gating_threshold"),
+            self.settings.gating_threshold,
+        )
+        min_c = _safe_int(
+            overrides.get("gating_min_candidates"),
+            self.settings.gating_min_candidates,
+        )
+        max_c = _safe_int(
+            overrides.get("gating_max_candidates"),
+            self.settings.gating_max_candidates,
+        )
+        temp = _safe_float(
+            overrides.get("gating_entropy_temp"),
+            self.settings.gating_entropy_temp,
+        )
 
         candidate_indices = np.array(candidates, dtype=int)
         sims_for_gate = dense[candidate_indices]
@@ -182,11 +224,11 @@ class Reranker:
         )
 
         if decision.use_gating:
-            selected_positions = gating.top_indices_by_similarity(
+            gating_positions = gating.top_indices_by_similarity(
                 sims_for_gate, decision.candidate_count
             )
-            candidate_indices = candidate_indices[selected_positions]
-            sims_for_gate = sims_for_gate[selected_positions]
+            candidate_indices = candidate_indices[gating_positions]
+            sims_for_gate = sims_for_gate[gating_positions]
 
         effective_candidate_count = int(candidate_indices.size)
 
@@ -222,7 +264,7 @@ class Reranker:
         )
 
         # MMR diversity — greedy re-ranking
-        selected_positions: list[int] = []
+        mmr_selected_positions: list[int] = []
         remaining_positions = set(range(effective_candidate_count))
 
         # ε-greedy exploration: occasionally pick a random item
@@ -230,11 +272,11 @@ class Reranker:
         mmr_lam = float(mmr_lambda if 0.0 <= mmr_lambda <= 1.0 else 0.5)
 
         def mmr_gain(pos: int) -> float:
-            if not selected_positions:
+            if not mmr_selected_positions:
                 return float(base[pos])
             sim_to_selected = max(
                 float(np.dot(doc_embeddings_subset[pos], doc_embeddings_subset[j]))
-                for j in selected_positions
+                for j in mmr_selected_positions
             )
             return float(mmr_lam * base[pos] - (1.0 - mmr_lam) * sim_to_selected)
 
@@ -245,7 +287,7 @@ class Reranker:
             else:
                 pick = max(remaining_positions, key=mmr_gain)
             order_positions.append(pick)
-            selected_positions.append(pick)
+            mmr_selected_positions.append(pick)
             remaining_positions.remove(pick)
 
         scored = [
