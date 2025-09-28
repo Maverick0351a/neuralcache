@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="Carnot.svg" alt="Carnot Engine" width="220" />
+	<img src="assets/Carnot.svg" alt="Carnot Engine" width="280" />
 </p>
 
 # NeuralCache — Narrative- & Stigmergy-Aware Reranker for RAG
