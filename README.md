@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
 [![Lint](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml)
-[![Tests](https://github.com/Maverick0351a/neuralcache/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/tests.yml)
 [![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
 [![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
 
