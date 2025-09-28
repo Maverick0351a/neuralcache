@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -29,10 +29,21 @@ def _resolve_query_embedding(req: RerankRequest) -> np.ndarray:
     return reranker.encode_query(req.query)
 
 
-def _score_documents(req: RerankRequest) -> list[ScoredDocument]:
+def _score_documents(req: RerankRequest, use_cr: bool | None = None) -> list[ScoredDocument]:
     docs = list(req.documents)
     query_embedding = _resolve_query_embedding(req)
-    scored = reranker.score(query_embedding, docs, mmr_lambda=req.mmr_lambda)
+    previous = reranker.settings.cr.on
+    if use_cr is not None:
+        reranker.settings.cr.on = use_cr
+    try:
+        scored = reranker.score(
+            query_embedding,
+            docs,
+            mmr_lambda=req.mmr_lambda,
+            query_text=req.query,
+        )
+    finally:
+        reranker.settings.cr.on = previous
     return scored[: min(req.top_k, len(scored))]
 
 
@@ -41,12 +52,15 @@ def _observe(endpoint: str, status: str, duration: float, doc_count: int) -> Non
 
 
 @app.post("/rerank")
-def rerank_endpoint(req: RerankRequest) -> JSONResponse:
+def rerank_endpoint(
+    req: RerankRequest,
+    use_cr: bool | None = Query(default=None, description="Override CR toggle"),
+) -> JSONResponse:
     start = time.perf_counter()
     status = "success"
     scope_docs: list[ScoredDocument] = []
     try:
-        scope_docs = _score_documents(req)
+        scope_docs = _score_documents(req, use_cr=use_cr)
         payload = [doc.model_dump() for doc in scope_docs]
         return JSONResponse(payload)
     except Exception as exc:  # pragma: no cover - FastAPI handles traceback
@@ -58,13 +72,16 @@ def rerank_endpoint(req: RerankRequest) -> JSONResponse:
 
 
 @app.post("/rerank/batch")
-def rerank_batch_endpoint(batch: BatchRerankRequest) -> JSONResponse:
+def rerank_batch_endpoint(
+    batch: BatchRerankRequest,
+    use_cr: bool | None = Query(default=None, description="Override CR toggle"),
+) -> JSONResponse:
     start = time.perf_counter()
     status = "success"
     scored_batches: list[list[ScoredDocument]] = []
     try:
         for request in batch.requests:
-            scored = _score_documents(request)
+            scored = _score_documents(request, use_cr=use_cr)
             scored_batches.append(scored)
         payload = [[doc.model_dump() for doc in scored] for scored in scored_batches]
         return JSONResponse(payload)

@@ -20,9 +20,15 @@ def rerank(
         help="Path to a JSONL file of documents with fields: id,text",
     ),
     top_k: int = typer.Option(5, help="Top-K results to print"),
+    use_cr: bool = typer.Option(
+        False,
+        "--use-cr/--no-cr",
+        help="Toggle hierarchical Cognitive Renormalization candidate selection",
+    ),
 ) -> None:
     settings = Settings()
     r = Reranker(settings=settings)
+    r.settings.cr.on = use_cr
 
     # Build query embedding via configured encoder (hashing fallback)
     q = r.encode_query(query)
@@ -52,7 +58,7 @@ def rerank(
             param_hint="top_k",
         )
 
-    scored = r.score(q, docs)
+    scored = r.score(q, docs, query_text=query)
     for sd in scored[:top_k]:
         typer.echo(json.dumps(sd.model_dump(), ensure_ascii=False))
 

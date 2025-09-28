@@ -1,5 +1,20 @@
-from pydantic import Field
+from typing import Literal
+
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class CRSettings(BaseModel):
+    on: bool = Field(default=False, description="Enable hierarchical CR search")
+    d1: int = 256
+    d2: int = 64
+    k2: int = 16
+    k1_per_bucket: int = 12
+    top_coarse: int = 3
+    top_topics_per_coarse: int = 2
+    max_candidates: int = 256
+    index_npz_path: str = "cr_index.npz"
+    index_meta_path: str = "cr_index.meta.json"
 
 
 class Settings(BaseSettings):
@@ -41,5 +56,14 @@ class Settings(BaseSettings):
     storage_db_name: str = "neuralcache.db"
     narrative_store_path: str = "narrative.json"
     pheromone_store_path: str = "pheromones.json"
+
+    # --- Cognitive Gating (AUTO-Gate) ---
+    gating_mode: Literal["off", "auto", "on"] = "auto"
+    gating_threshold: float = 0.7
+    gating_min_candidates: int = 100
+    gating_max_candidates: int = 400
+    gating_entropy_temp: float = 1.0
+
+    cr: CRSettings = CRSettings()
 
     model_config = SettingsConfigDict(env_prefix="NEURALCACHE_", env_file=".env", extra="ignore")

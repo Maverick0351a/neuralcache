@@ -6,7 +6,6 @@
 *Adaptive reranker for Retrieval-Augmented Generation (RAG)*
 
 [![PyPI](https://img.shields.io/pypi/v/neuralcache.svg)](https://pypi.org/project/neuralcache/)
-[![Demo uplift](https://img.shields.io/badge/Context--Use%403-%2B7.14%25-brightgreen)](examples/context_use_demo/README_demo.md)
 [![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
 [![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
 [![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
@@ -52,6 +51,17 @@ curl -s -X POST http://127.0.0.1:8080/rerank -H "Content-Type: application/json"
 kill $server_pid
 ```
 
+### Need batch reranking or Prometheus metrics?
+
+```bash
+pip install neuralcache[ops]
+uvicorn neuralcache.api.server_plus:app --port 8081 --reload
+```
+
+- Batch endpoint: `POST http://127.0.0.1:8081/rerank/batch`
+- Metrics scrape: `GET  http://127.0.0.1:8081/metrics` (requires the `prometheus-client` dependency supplied by the `ops` extra)
+- Legacy routes remain available under `/v1/...`
+
 ---
 
 ## Why teams choose NeuralCache
@@ -63,6 +73,9 @@ kill $server_pid
 - **Zero external dependencies by default.** Uses a hashing trick for embeddings so you can see results instantly, but slots in any vector model when you’re ready.
 - **Adapters included.** LangChain and LlamaIndex adapters ship in `neuralcache.adapters` and only import their extras when you use them.
 - **CLI + REST API + FastAPI docs** give you multiple ways to integrate and debug.
+- **Plus API** adds `/rerank/batch` and Prometheus-ready `/metrics` endpoints when you run `uvicorn neuralcache.api.server_plus:app` (install the `neuralcache[ops]` extra for dependencies).
+- **SQLite persistence out of the box.** `neuralcache.storage.sqlite_state.SQLiteState` keeps narrative + pheromone state durable across workers without JSON file juggling.
+- **Cognitive gating** right-sizes the rerank set on the fly, trimming obvious non-starters to save downstream tokens without losing recall.
 
 ### Use cases
 
@@ -87,9 +100,22 @@ All of this is orchestrated by `neuralcache.rerank.Reranker`, configurable throu
 
 ---
 
+## Cognitive gating
+
+NeuralCache now ships with an entropy-aware gating layer that decides how many candidates to score for each query. The gate looks at the dense similarity distribution, estimates uncertainty with a softmax entropy probe, and then uses a logistic curve to select a candidate budget between your configured min/max bounds.
+
+- **Modes**: `off` (never trims), `auto` (entropy-driven; default), `on` (always apply gating using provided thresholds).
+- **Overrides**: Pass a `gating_overrides` dict on `/rerank` or `/rerank/batch` calls to tweak mode, min/max candidates, threshold, or temperature per request.
+- **Observability**: Enable `return_debug=true` to receive `gating` telemetry (mode, uncertainty, chosen candidate count, masked ids) alongside the rerank results.
+
+Gating plugs in before narrative, pheromone, and MMR scoring—so downstream memories and pheromones still receive consistent updates even when the candidate pool shrinks.
+
+---
+
 ## Integrations & interfaces
 
 - **REST API** (`uvicorn neuralcache.api.server:app`) with `/rerank`, `/feedback`, `/metrics`, and `/healthz` endpoints.
+- **Plus API** (`uvicorn neuralcache.api.server_plus:app`) adds `/rerank/batch`, Prometheus `/metrics`, and mounts the legacy routes under `/v1`.
 - **CLI** (`neuralcache "<query>" docs.jsonl --top-k 5`) for quick experiments and scripting.
 - **LangChain adapter**: `from neuralcache.adapters import NeuralCacheLangChainReranker`
 - **LlamaIndex adapter**: `from neuralcache.adapters import NeuralCacheLlamaIndexReranker`
@@ -108,16 +134,23 @@ See [`examples/quickstart.py`](examples/quickstart.py) for an end-to-end script.
 | `NEURALCACHE_MAX_DOCUMENTS` | Safety cap on rerank set size | `128` |
 | `NEURALCACHE_MAX_TEXT_LENGTH` | Hard limit on document length (characters) | `8192` |
 | `NEURALCACHE_STORAGE_DIR` | Where SQLite + JSON state is stored | `storage/` |
+| `NEURALCACHE_GATING_MODE` | Cognitive gate mode (`off`, `auto`, `on`) | `auto` |
+| `NEURALCACHE_GATING_THRESHOLD` | Uncertainty threshold for trimming | `0.45` |
+| `NEURALCACHE_GATING_MIN_CANDIDATES` | Lower bound for rerank candidates | `8` |
+| `NEURALCACHE_GATING_MAX_CANDIDATES` | Upper bound for rerank candidates | `48` |
+| `NEURALCACHE_GATING_TEMPERATURE` | Softmax temperature when estimating entropy | `1.0` |
 
 Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation.
 
-Persistence happens automatically using SQLite (or JSON fallback) so narrative and pheromone stores survive restarts. Point `NEURALCACHE_STORAGE_DIR` at shared storage for multi-worker deployments.
+Persistence happens automatically using SQLite (or JSON fallback) so narrative and pheromone stores survive restarts. Point `NEURALCACHE_STORAGE_DIR` at shared storage for multi-worker deployments, or import `SQLiteState` directly if you need to wire the persistence layer into an existing app container.
 
 ---
 
 ## Evaluation: prove the uplift
 
-We ship `scripts/eval_context_use.py` to measure Context-Use@K on any JSONL dataset (query, docs, answer). It can compare a baseline retriever with a NeuralCache-powered candidate.
+We ship `scripts/eval_context_use.py` to measure Context-Use@K on any JSONL dataset (query, docs, answer). It can compare a baseline retriever with a NeuralCache-powered candidate. Install the `neuralcache[ops]` extra to pull in the `requests` dependency used by the script and Prometheus exporters in one go.
+
+Want to stress-test gating specifically? Run `scripts/eval_gating.py` to generate a synthetic A/B comparison between the entropy-driven gate and a control configuration. The script logs summaries to stdout and writes a CSV artifact you can pull into spreadsheets or dashboards.
 
 ```bash
 python scripts/eval_context_use.py \
@@ -140,25 +173,9 @@ Eval complete in 4.82s | Baseline Context-Use@5: 9/20 | NeuralCache: 13/20
 
 Use the generated CSV to inspect which queries improved, regressions, and latency statistics.
 
-### Context-Use proof demo
+### Sample datasets
 
-Looking for a turnkey example? Drop into [`examples/context_use_demo/`](examples/context_use_demo/) and run the bundled harness:
-
-```powershell
-python examples\context_use_demo\eval_context_use.py --data-dir examples\context_use_demo --K 3
-```
-
-This deterministic toy dataset simulates thirty training and thirty evaluation queries across three topics. The adaptive reranker (narrative EMA + pheromones) lifts Context-Use@3 over a cosine-only baseline:
-
-| Metric | Baseline | Adaptive | Relative uplift |
-| --- | --- | --- | --- |
-| Context-Use@3 (overall) | 0.5185 | 0.5556 | +7.14% |
-
-Per-topic scores plus the CSV artifact live in `examples/context_use_demo/results.csv`, and the bar chart below ships alongside the demo for slide decks:
-
-![Context-Use@3 uplift chart](examples/context_use_demo/context_use_uplift.png)
-
-Feel free to swap in your own corpora—everything is JSONL so you can edit in place and rerun the script for instant comparisons.
+The previous synthetic Context-Use demo is being redesigned. We’ll publish a refreshed walkthrough once the new baseline is validated. In the meantime you can point `scripts/eval_context_use.py` at your own JSONL datasets to measure uplift between any two rerankers.
 
 ---
 
@@ -173,6 +190,7 @@ neuralcache/
 │  ├─ api/                # FastAPI app exposing REST endpoints
 │  ├─ adapters/           # LangChain + LlamaIndex integrations
 │  ├─ metrics/            # Context-Use@K helpers & Prometheus hooks
+│  ├─ gating.py           # Cognitive gating heuristics
 │  ├─ narrative.py        # Narrative memory tracker
 │  ├─ pheromone.py        # Pheromone store with decay/exposure logic
 │  ├─ rerank.py           # Core reranking orchestrator
@@ -185,7 +203,7 @@ neuralcache/
 
 ## Metrics & observability
 
-- `/metrics` exposes Prometheus counters for request volume, success rate, and Context-Use@K proxy.
+- `/metrics` exposes Prometheus counters for request volume, success rate, and Context-Use@K proxy. Install the `neuralcache[ops]` extra (bundles `prometheus-client`) and run the Plus API for an out-of-the-box scrape target.
 - Structured logging (via `rich` + standard logging) shows rerank decisions with scores.
 - Extend telemetry by dropping in OpenTelemetry exporters or shipping events to your own observability stack.
 

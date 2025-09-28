@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -36,6 +36,11 @@ class RerankRequest(BaseModel):
     query_embedding: list[float] | None = None
     top_k: int = 10
     mmr_lambda: float = 0.5
+    gating_mode: Literal["off", "auto", "on"] | None = None
+    gating_threshold: float | None = None
+    gating_min_candidates: int | None = None
+    gating_max_candidates: int | None = None
+    gating_entropy_temp: float | None = None
 
     @field_validator("top_k")
     @classmethod
@@ -57,6 +62,10 @@ class RerankRequest(BaseModel):
 class ScoredDocument(Document):
     score: float = 0.0
     components: dict[str, float] = Field(default_factory=dict)
+
+
+class RerankDebug(BaseModel):
+    gating: dict[str, Any] | None = None
 
 
 class Feedback(BaseModel):

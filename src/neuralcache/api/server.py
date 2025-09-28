@@ -5,13 +5,13 @@ import time
 from collections import OrderedDict, deque
 
 import numpy as np
-from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 
 from ..config import Settings
 from ..metrics import latest_metrics, metrics_enabled, observe_rerank, record_feedback
 from ..rerank import Reranker
-from ..types import Document, Feedback, RerankRequest, ScoredDocument
+from ..types import Document, Feedback, RerankDebug, RerankRequest, ScoredDocument
 
 settings = Settings()
 app = FastAPI(title=settings.api_title, version=settings.api_version)
@@ -109,20 +109,44 @@ async def rerank(
     req: RerankRequest,
     api_ok: None = Depends(_require_api_key),
     rate_ok: None = Depends(_rate_limit),
+    use_cr: bool | None = Query(default=None, description="Override CR toggle"),
 ) -> JSONResponse:
+    previous_cr = reranker.settings.cr.on
+    if use_cr is not None:
+        reranker.settings.cr.on = use_cr
     _validate_request(req)
     start = time.perf_counter()
     status_label = "success"
     try:
+        overrides = {
+            k: v
+            for k, v in {
+                "gating_mode": req.gating_mode,
+                "gating_threshold": req.gating_threshold,
+                "gating_min_candidates": req.gating_min_candidates,
+                "gating_max_candidates": req.gating_max_candidates,
+                "gating_entropy_temp": req.gating_entropy_temp,
+            }.items()
+            if v is not None
+        }
+        debug_payload: dict[str, object] = {}
         if req.query_embedding is not None:
             q = np.array(req.query_embedding, dtype=np.float32)
         else:
             q = reranker.encode_query(req.query)
-        scored = reranker.score(q, list(req.documents), mmr_lambda=req.mmr_lambda)
+        scored = reranker.score(
+            q,
+            list(req.documents),
+            mmr_lambda=req.mmr_lambda,
+            query_text=req.query,
+            overrides=overrides or None,
+            debug=debug_payload,
+        )
         limited = scored[: min(req.top_k, len(scored))]
         _remember_scored(limited)
         payload = [doc.model_dump() for doc in limited]
-        return JSONResponse(payload)
+        debug_model = RerankDebug(gating=debug_payload.get("gating"))
+        return JSONResponse({"results": payload, "debug": debug_model.model_dump()})
     except HTTPException:
         status_label = "error"
         raise
@@ -136,6 +160,7 @@ async def rerank(
             duration=time.perf_counter() - start,
             doc_count=len(req.documents),
         )
+        reranker.settings.cr.on = previous_cr
 
 
 @app.post("/rerank/batch")
@@ -143,13 +168,17 @@ async def rerank_batch(
     batch: list[RerankRequest],
     api_ok: None = Depends(_require_api_key),
     rate_ok: None = Depends(_rate_limit),
+    use_cr: bool | None = Query(default=None, description="Override CR toggle"),
 ) -> JSONResponse:
+    previous_cr = reranker.settings.cr.on
+    if use_cr is not None:
+        reranker.settings.cr.on = use_cr
     if len(batch) > settings.max_batch_size:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Batch size exceeds configured maximum",
         )
-    results: list[list[dict[str, object]]] = []
+    results: list[dict[str, object]] = []
     start = time.perf_counter()
     status_label = "success"
     total_docs = 0
@@ -157,14 +186,35 @@ async def rerank_batch(
         for req in batch:
             _validate_request(req)
             total_docs += len(req.documents)
+            overrides = {
+                k: v
+                for k, v in {
+                    "gating_mode": req.gating_mode,
+                    "gating_threshold": req.gating_threshold,
+                    "gating_min_candidates": req.gating_min_candidates,
+                    "gating_max_candidates": req.gating_max_candidates,
+                    "gating_entropy_temp": req.gating_entropy_temp,
+                }.items()
+                if v is not None
+            }
+            debug_payload: dict[str, object] = {}
             if req.query_embedding is not None:
                 q = np.array(req.query_embedding, dtype=np.float32)
             else:
                 q = reranker.encode_query(req.query)
-            scored = reranker.score(q, list(req.documents), mmr_lambda=req.mmr_lambda)
+            scored = reranker.score(
+                q,
+                list(req.documents),
+                mmr_lambda=req.mmr_lambda,
+                query_text=req.query,
+                overrides=overrides or None,
+                debug=debug_payload,
+            )
             limited = scored[: min(req.top_k, len(scored))]
             _remember_scored(limited)
-            results.append([doc.model_dump() for doc in limited])
+            payload = [doc.model_dump() for doc in limited]
+            debug_model = RerankDebug(gating=debug_payload.get("gating"))
+            results.append({"results": payload, "debug": debug_model.model_dump()})
         return JSONResponse(results)
     except HTTPException:
         status_label = "error"
@@ -179,6 +229,7 @@ async def rerank_batch(
             duration=time.perf_counter() - start,
             doc_count=total_docs,
         )
+        reranker.settings.cr.on = previous_cr
 
 
 class FeedbackRequest(Feedback):

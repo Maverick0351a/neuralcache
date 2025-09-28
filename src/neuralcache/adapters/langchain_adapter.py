@@ -37,7 +37,7 @@ class NeuralCacheLangChainReranker:
 
         nc_docs = self._convert_documents(documents)
         query_embedding = self.reranker.encode_query(query)
-        scored = self.reranker.score(query_embedding, nc_docs)
+        scored = self.reranker.score(query_embedding, nc_docs, query_text=query)
         return [documents[int(sd.id)] for sd in scored]
 
     def _convert_documents(self, documents: Sequence[LCDocument]) -> list[NC_Document]:

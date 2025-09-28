@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+
 from neuralcache.config import Settings
 from neuralcache.rerank import Reranker
 from neuralcache.types import Document
@@ -30,9 +31,10 @@ docs = [
 settings = Settings()
 reranker = Reranker(settings=settings)
 
+query = "What is stigmergy in AI systems?"
 q = np.zeros((settings.narrative_dim,), dtype=float)
-for tok in "What is stigmergy in AI systems?".lower().split():
+for tok in query.lower().split():
     q[hash(tok) % settings.narrative_dim] += 1.0
 
-scored = reranker.score(q, docs)
+scored = reranker.score(q, docs, query_text=query)
 print(json.dumps([s.model_dump() for s in scored], indent=2))

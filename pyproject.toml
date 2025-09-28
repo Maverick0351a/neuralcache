@@ -46,6 +46,7 @@ ops = ["prometheus-client>=0.20", "requests>=2.32"]
 
 [project.scripts]
 neuralcache = "neuralcache.cli:app"
+neuralcache-build-cr = "neuralcache.cr.cli:build_cr_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

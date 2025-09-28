@@ -48,7 +48,7 @@ class NeuralCacheLlamaIndexReranker(BaseNodePostprocessor):
         nc_docs = self._convert_nodes(nodes)
         query = query_str or (query_bundle.query_str if query_bundle else "")
         query_embedding = self.reranker.encode_query(query)
-        scored = self.reranker.score(query_embedding, nc_docs)
+        scored = self.reranker.score(query_embedding, nc_docs, query_text=query)
         return [NodeWithScore(node=nodes[int(sd.id)].node, score=sd.score) for sd in scored]
 
     def _convert_nodes(self, nodes: list[NodeWithScore]) -> list[NC_Document]:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from neuralcache.embedding import encode_texts
+
 
 def safe_normalize(x: np.ndarray, eps: float = 1e-9) -> np.ndarray:
     n = np.linalg.norm(x, axis=-1, keepdims=True) + eps
@@ -21,3 +23,7 @@ def batched_cosine_sims(query: np.ndarray, docs: np.ndarray) -> np.ndarray:
     q = safe_normalize(q)
     docs_norm = safe_normalize(docs)
     return (q @ docs_norm.T).reshape(-1)
+
+
+def embed_corpus(texts: list[str], dim: int = 384) -> np.ndarray:
+    return encode_texts(texts, dim=dim)
