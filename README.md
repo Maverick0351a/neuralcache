@@ -6,6 +6,7 @@
 *Adaptive reranker for Retrieval-Augmented Generation (RAG)*
 
 [![PyPI](https://img.shields.io/pypi/v/neuralcache.svg)](https://pypi.org/project/neuralcache/)
+[![Demo uplift](https://img.shields.io/badge/Context--Use%403-%2B7.14%25-brightgreen)](examples/context_use_demo/README_demo.md)
 [![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
 [![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
 [![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
@@ -138,6 +139,26 @@ Eval complete in 4.82s | Baseline Context-Use@5: 9/20 | NeuralCache: 13/20
 ```
 
 Use the generated CSV to inspect which queries improved, regressions, and latency statistics.
+
+### Context-Use proof demo
+
+Looking for a turnkey example? Drop into [`examples/context_use_demo/`](examples/context_use_demo/) and run the bundled harness:
+
+```powershell
+python examples\context_use_demo\eval_context_use.py --data-dir examples\context_use_demo --K 3
+```
+
+This deterministic toy dataset simulates thirty training and thirty evaluation queries across three topics. The adaptive reranker (narrative EMA + pheromones) lifts Context-Use@3 over a cosine-only baseline:
+
+| Metric | Baseline | Adaptive | Relative uplift |
+| --- | --- | --- | --- |
+| Context-Use@3 (overall) | 0.5185 | 0.5556 | +7.14% |
+
+Per-topic scores plus the CSV artifact live in `examples/context_use_demo/results.csv`, and the bar chart below ships alongside the demo for slide decks:
+
+![Context-Use@3 uplift chart](examples/context_use_demo/context_use_uplift.png)
+
+Feel free to swap in your own corpora—everything is JSONL so you can edit in place and rerun the script for instant comparisons.
 
 ---
 

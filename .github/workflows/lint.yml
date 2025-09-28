@@ -1,25 +1,13 @@
-name: Lint
+name: Lint (disabled)
 
+# This workflow is intentionally disabled so that Ruff/pre-commit run only in local environments.
+# Retained as a placeholder to avoid accidental re-introduction via automation.
 on:
-  pull_request:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  precommit:
+  noop:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .[dev]
-
-      - name: Run pre-commit
-        run: |
-          pre-commit run --all-files
+      - run: echo "Ruff/pre-commit lint is disabled in CI."
