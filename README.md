@@ -1,5 +1,10 @@
+<p align="center">
+	<img src="Carnot.svg" alt="Carnot Engine" width="220" />
+</p>
+
 # NeuralCache — Narrative- & Stigmergy-Aware Reranker for RAG
 
+[![PyPI](https://img.shields.io/pypi/v/neuralcache.svg)](https://pypi.org/project/neuralcache/)
 [![CI](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/ci.yml)
 [![Lint](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/lint.yml)
 [![Docker](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Maverick0351a/neuralcache/actions/workflows/docker.yml)
