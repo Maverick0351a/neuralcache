@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     storage_backend: str = "sqlite"
     storage_dir: str = "storage"
     storage_db_name: str = "neuralcache.db"
+    storage_persistence_enabled: bool = True
+    storage_retention_days: float | None = None
     narrative_store_path: str = "narrative.json"
     pheromone_store_path: str = "pheromones.json"
 

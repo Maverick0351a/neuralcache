@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import time
 from contextlib import suppress
 
 import numpy as np
@@ -28,14 +29,19 @@ class NarrativeTracker:
         self.path = (base_path / path).as_posix()
         self._sqlite = sqlite_state
         self.v = np.zeros((dim,), dtype=np.float32)
+        self._updated_ts = 0.0
         self._load()
 
     def _load(self) -> None:
+        if self.backend == "memory":
+            self._updated_ts = 0.0
+            return
         if self.backend == "sqlite" and self._sqlite is not None:
             with suppress(Exception):
-                stored = self._sqlite.load_narrative()
+                stored, updated_ts = self._sqlite.load_narrative_record()
                 if stored is not None and stored.size == self.v.size:
                     self.v = stored.astype(np.float32)
+                    self._updated_ts = float(updated_ts or 0.0)
             return
 
         path = pathlib.Path(self.path)
@@ -48,8 +54,13 @@ class NarrativeTracker:
             arr = np.array(data.get("v", []), dtype=np.float32)
             if arr.size == self.v.size:
                 self.v = arr
+                self._updated_ts = float(data.get("updated_ts", 0.0))
 
     def _save(self) -> None:
+        now = time.time()
+        self._updated_ts = now
+        if self.backend == "memory":
+            return
         if self.backend == "sqlite" and self._sqlite is not None:
             with suppress(Exception):
                 self._sqlite.save_narrative(self.v)
@@ -58,7 +69,7 @@ class NarrativeTracker:
         path = pathlib.Path(self.path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with suppress(Exception), path.open("w", encoding="utf-8") as handle:
-            json.dump({"v": self.v.tolist()}, handle)
+            json.dump({"v": self.v.tolist(), "updated_ts": now}, handle)
         with suppress(Exception):
             path.chmod(0o600)
 
@@ -82,3 +93,22 @@ class NarrativeTracker:
         docs_norm = safe_normalize(doc_embeddings)
         sims = (v @ docs_norm.T).reshape(-1)
         return sims.astype(np.float32)
+
+    def purge_if_stale(self, retention_seconds: float) -> None:
+        if retention_seconds <= 0:
+            return
+        cutoff = time.time() - retention_seconds
+        if self._updated_ts == 0 or self._updated_ts >= cutoff:
+            return
+        self.v = np.zeros_like(self.v, dtype=np.float32)
+        self._updated_ts = 0.0
+        if self.backend == "sqlite" and self._sqlite is not None:
+            with suppress(Exception):
+                self._sqlite.clear_narrative()
+        elif self.backend == "json":
+            path = pathlib.Path(self.path)
+            with suppress(FileNotFoundError):
+                path.unlink()
+
+    def refresh(self) -> None:
+        self._load()

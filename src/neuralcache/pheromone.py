@@ -31,6 +31,8 @@ class PheromoneStore:
             self._load()
 
     def _load(self) -> None:
+        if self.backend == "memory":
+            return
         path = pathlib.Path(self.path)
         if not path.exists():
             return
@@ -42,6 +44,8 @@ class PheromoneStore:
 
     def _save(self) -> None:
         if self.backend == "sqlite" and self._sqlite is not None:
+            return
+        if self.backend == "memory":
             return
 
         path = pathlib.Path(self.path)
@@ -131,5 +135,22 @@ class PheromoneStore:
                 rec = self.data.get(doc_id, {"value": 0.0, "t": time.time(), "exposures": 0.0})
                 rec["exposures"] = float(rec.get("exposures", 0.0)) + 1.0
                 self.data[doc_id] = rec
+        if self.backend == "json":
+            self._save()
+
+    def purge_older_than(self, retention_seconds: float) -> None:
+        if retention_seconds <= 0:
+            return
+        if self.backend == "sqlite" and self._sqlite is not None:
+            self._sqlite.purge_older_than(retention_seconds)
+            return
+        cutoff = time.time() - retention_seconds
+        stale_keys = [
+            doc_id
+            for doc_id, rec in self.data.items()
+            if float(rec.get("t", 0.0)) < cutoff
+        ]
+        for key in stale_keys:
+            self.data.pop(key, None)
         if self.backend == "json":
             self._save()

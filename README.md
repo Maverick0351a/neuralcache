@@ -71,7 +71,7 @@ uvicorn neuralcache.api.server_plus:app --port 8081 --reload
 - **Stigmergic pheromones** reward useful documents but decay over time, preventing filter bubbles.
 - **MMR + ε-greedy** introduces diversity without tanking relevance.
 - **Zero external dependencies by default.** Uses a hashing trick for embeddings so you can see results instantly, but slots in any vector model when you’re ready.
-- **Adapters included.** LangChain and LlamaIndex adapters ship in `neuralcache.adapters` and only import their extras when you use them.
+- **Adapters included.** LangChain and LlamaIndex adapters ship in `neuralcache.adapters`; install them on demand with `pip install "neuralcache[adapters]"`.
 - **CLI + REST API + FastAPI docs** give you multiple ways to integrate and debug.
 - **Plus API** adds `/rerank/batch` and Prometheus-ready `/metrics` endpoints when you run `uvicorn neuralcache.api.server_plus:app` (install the `neuralcache[ops]` extra for dependencies).
 - **SQLite persistence out of the box.** `neuralcache.storage.sqlite_state.SQLiteState` keeps narrative + pheromone state durable across workers without JSON file juggling.
@@ -117,10 +117,60 @@ Gating plugs in before narrative, pheromone, and MMR scoring—so downstream mem
 - **REST API** (`uvicorn neuralcache.api.server:app`) with `/rerank`, `/feedback`, `/metrics`, and `/healthz` endpoints.
 - **Plus API** (`uvicorn neuralcache.api.server_plus:app`) adds `/rerank/batch`, Prometheus `/metrics`, and mounts the legacy routes under `/v1`.
 - **CLI** (`neuralcache "<query>" docs.jsonl --top-k 5`) for quick experiments and scripting.
-- **LangChain adapter**: `from neuralcache.adapters import NeuralCacheLangChainReranker`
-- **LlamaIndex adapter**: `from neuralcache.adapters import NeuralCacheLlamaIndexReranker`
+- **LangChain adapter** (`pip install "neuralcache[adapters]"`): `from neuralcache.adapters import NeuralCacheLangChainReranker`
+- **LlamaIndex adapter** (`pip install "neuralcache[adapters]"`): `from neuralcache.adapters import NeuralCacheLlamaIndexReranker`
 
 See [`examples/quickstart.py`](examples/quickstart.py) for an end-to-end script.
+
+---
+
+## Feedback API: closing the loop
+
+Send successful reranks back to NeuralCache so the narrative EMA and pheromone
+signals keep learning:
+
+```http
+POST /feedback
+Content-Type: application/json
+
+{
+  "query": "How do I rotate API keys?",
+  "selected_ids": ["doc-42", "doc-71"],
+  "success": 0.9,
+  "best_doc_text": "Rotate keys via the dashboard > API tokens",
+  "best_doc_embedding": [0.01, 0.32, -0.55, ...]
+}
+```
+
+- `selected_ids` **must** match the `id` values returned by `/rerank`. The API
+  rejects unknown IDs to prevent stale writes.
+- `success` scores the overall outcome (`1.0` for complete resolution, `0.0`
+  for failure). Values below `settings.narrative_success_gate` are ignored for
+  narrative updates but still count toward pheromone decay.
+- `best_doc_text`/`best_doc_embedding` are optional hints that let the reranker
+  update the narrative vector even when a caller reformats the answer before
+  returning it to the user.
+
+On success the endpoint responds with `{"status": "ok"}`.
+
+Tip: throttle feedback submissions with a short debounce window (e.g., only send
+feedback after end-users click “helpful”) to avoid promoting documents for noisy
+sessions.
+
+---
+
+## Privacy & retention tips
+
+- Set `NEURALCACHE_STORAGE_PERSISTENCE_ENABLED=false` to run fully in-memory. Narrative
+  vectors and pheromones reset on process restart and never touch disk.
+- Configure `NEURALCACHE_STORAGE_RETENTION_DAYS` (e.g., `7`) to purge pheromones and
+  narrative state older than the retention window on startup. SQLite purges directly
+  via `metadata`/`pheromones`, and the JSON fallback trims files in place.
+- Rotate SQLite files regularly or place them on encrypted storage. Review
+  [`SECURITY.md`](SECURITY.md) for reporting procedures and deployment guardrails.
+
+These controls let you scope how long user-derived signals persist while still
+benefiting from adaptive reranking.
 
 ---
 
@@ -134,6 +184,8 @@ See [`examples/quickstart.py`](examples/quickstart.py) for an end-to-end script.
 | `NEURALCACHE_MAX_DOCUMENTS` | Safety cap on rerank set size | `128` |
 | `NEURALCACHE_MAX_TEXT_LENGTH` | Hard limit on document length (characters) | `8192` |
 | `NEURALCACHE_STORAGE_DIR` | Where SQLite + JSON state is stored | `storage/` |
+| `NEURALCACHE_STORAGE_PERSISTENCE_ENABLED` | Disable to keep narrative + pheromones in-memory only | `true` |
+| `NEURALCACHE_STORAGE_RETENTION_DAYS` | Days before old state is purged on boot (supports SQLite + JSON) | _unset_ |
 | `NEURALCACHE_GATING_MODE` | Cognitive gate mode (`off`, `auto`, `on`) | `auto` |
 | `NEURALCACHE_GATING_THRESHOLD` | Uncertainty threshold for trimming | `0.45` |
 | `NEURALCACHE_GATING_MIN_CANDIDATES` | Lower bound for rerank candidates | `8` |
@@ -142,7 +194,11 @@ See [`examples/quickstart.py`](examples/quickstart.py) for an end-to-end script.
 
 Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation.
 
-Persistence happens automatically using SQLite (or JSON fallback) so narrative and pheromone stores survive restarts. Point `NEURALCACHE_STORAGE_DIR` at shared storage for multi-worker deployments, or import `SQLiteState` directly if you need to wire the persistence layer into an existing app container.
+Persistence happens automatically using SQLite (or JSON fallback) so narrative and pheromone stores survive restarts. Point `NEURALCACHE_STORAGE_DIR` at shared storage for multi-worker deployments, or import `SQLiteState` directly if you need to wire the persistence layer into an existing app container. Under the hood the SQLite state:
+
+- enables **WAL mode** with `synchronous=NORMAL` so multiple workers can read while a writer appends.
+- tracks a `metadata` row with the current schema version (`SQLiteState.schema_version()`), raising if a newer schema is encountered so upgrades can run explicit migrations before boot.
+- stores pheromone exposures and timestamps so retention/evaporation policies can prune long-lived records.
 
 ---
 

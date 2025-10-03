@@ -15,6 +15,8 @@ SqliteValue = dict[str, float]
 class SQLiteState:
     """Thread-safe persistence for narrative vectors and pheromone values."""
 
+    SCHEMA_VERSION = 1
+
     def __init__(self, path: str = "neuralcache.db") -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -47,6 +49,33 @@ class SQLiteState:
                 )
                 """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            )
+            version_row = cursor.execute(
+                "SELECT value FROM metadata WHERE key = 'schema_version'"
+            ).fetchone()
+            if version_row is None:
+                cursor.execute(
+                    "INSERT INTO metadata (key, value) VALUES ('schema_version', ?)",
+                    (str(self.SCHEMA_VERSION),),
+                )
+            else:
+                stored = int(version_row[0])
+                if stored > self.SCHEMA_VERSION:
+                    raise RuntimeError(
+                        "NeuralCache SQLite schema version is newer than supported"
+                    )
+                if stored < self.SCHEMA_VERSION:
+                    cursor.execute(
+                        "UPDATE metadata SET value = ? WHERE key = 'schema_version'",
+                        (str(self.SCHEMA_VERSION),),
+                    )
             self._conn.commit()
 
     def close(self) -> None:
@@ -58,6 +87,14 @@ class SQLiteState:
 
     def __exit__(self, *_exc: Any) -> None:
         self.close()
+
+    def schema_version(self) -> int:
+        with self._lock:
+            cursor = self._conn.execute(
+                "SELECT value FROM metadata WHERE key = 'schema_version'"
+            )
+            row = cursor.fetchone()
+        return int(row[0]) if row else self.SCHEMA_VERSION
 
     def save_narrative(self, vector: np.ndarray | list[float]) -> None:
         arr = np.asarray(vector, dtype=float).reshape(-1)
@@ -78,13 +115,19 @@ class SQLiteState:
             self._conn.commit()
 
     def load_narrative(self) -> np.ndarray | None:
+        vector, _ = self.load_narrative_record()
+        return vector
+
+    def load_narrative_record(self) -> tuple[np.ndarray | None, float | None]:
         with self._lock:
-            cursor = self._conn.execute("SELECT vector FROM narrative WHERE id = 1")
+            cursor = self._conn.execute(
+                "SELECT vector, updated_ts FROM narrative WHERE id = 1"
+            )
             row = cursor.fetchone()
         if row is None:
-            return None
+            return None, None
         data = json.loads(row[0])
-        return np.array(data, dtype=np.float32)
+        return np.array(data, dtype=np.float32), float(row[1])
 
     def clear_narrative(self) -> None:
         with self._lock:
@@ -187,6 +230,17 @@ class SQLiteState:
             doc_id: {"value": float(value), "t": float(ts), "exposures": float(exposures)}
             for doc_id, value, ts, exposures in rows
         }
+
+    def purge_older_than(self, retention_seconds: float) -> None:
+        if retention_seconds <= 0:
+            return
+        cutoff = time.time() - retention_seconds
+        with self._lock:
+            self._conn.execute("DELETE FROM pheromones WHERE ts < ?", (cutoff,))
+            row = self._conn.execute("SELECT updated_ts FROM narrative WHERE id = 1").fetchone()
+            if row is not None and float(row[0]) < cutoff:
+                self._conn.execute("DELETE FROM narrative WHERE id = 1")
+            self._conn.commit()
 
 
 __all__ = ["SQLiteState"]

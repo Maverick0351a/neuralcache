@@ -56,12 +56,19 @@ class Reranker:
         )
         self._cr_index: CRIndex | None = None
         storage_backend = (self.settings.storage_backend or "sqlite").lower()
+        if not self.settings.storage_persistence_enabled:
+            storage_backend = "memory"
         storage_dir = Path(self.settings.storage_dir or ".")
         storage_dir.mkdir(parents=True, exist_ok=True)
         sqlite_state: SQLiteState | None = None
+        retention_seconds: float | None = None
+        if self.settings.storage_retention_days is not None:
+            retention_seconds = max(0.0, float(self.settings.storage_retention_days) * 86400.0)
         if storage_backend == "sqlite":
             db_path = storage_dir / self.settings.storage_db_name
             sqlite_state = SQLiteState(path=str(db_path))
+            if retention_seconds:
+                sqlite_state.purge_older_than(retention_seconds)
         self._sqlite_state = sqlite_state
         self.narr = NarrativeTracker(
             dim=self.settings.narrative_dim,
@@ -80,6 +87,9 @@ class Reranker:
             storage_dir=str(storage_dir),
             sqlite_state=sqlite_state,
         )
+        if retention_seconds:
+            self.narr.purge_if_stale(retention_seconds)
+            self.pher.purge_older_than(retention_seconds)
 
     def _ensure_cr_loaded(self) -> CRIndex | None:
         if not self.settings.cr.on:

@@ -20,8 +20,8 @@ classifiers = [
 ]
 
 dependencies = [
-  "fastapi>=0.110,<1.0",
-  "uvicorn[standard]>=0.24",
+  "fastapi>=0.111,<0.114",
+  "uvicorn[standard]>=0.24,<0.30",
   "numpy>=1.26",
   "pydantic>=2.6",
   "pydantic-settings>=2.2",
@@ -30,9 +30,6 @@ dependencies = [
   "orjson>=3.9",
   "python-dateutil>=2.9",
   "rich>=13.7",
-  # optional adapters (safe to import conditionally)
-  "langchain-core>=0.2; python_version >= '3.11'",
-  "llama-index-core>=0.10; python_version >= '3.11'",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +40,10 @@ embeddings = [
   "sentence-transformers>=2.6.0"
 ]
 ops = ["prometheus-client>=0.20", "requests>=2.32"]
+adapters = [
+  "langchain-core>=0.2",
+  "llama-index-core>=0.10",
+]
 
 [project.scripts]
 neuralcache = "neuralcache.cli:app"
