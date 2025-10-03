@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=78.1.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -20,8 +20,9 @@ classifiers = [
 ]
 
 dependencies = [
-  "fastapi>=0.111,<0.114",
-  "uvicorn[standard]>=0.24,<0.30",
+  "fastapi>=0.118,<0.119",
+  "starlette>=0.47.2,<0.49",
+  "uvicorn[standard]>=0.30,<0.31",
   "numpy>=1.26",
   "pydantic>=2.6",
   "pydantic-settings>=2.2",
