@@ -14,6 +14,8 @@
 
 NeuralCache is a lightweight reranker for RAG pipelines that *actually remembers what helped*. It blends dense semantic similarity with a narrative memory of past wins and stigmergic pheromones that reward helpful passages while decaying stale ones—then spices in MMR diversity and ε-greedy exploration. The result: more relevant context for your LLM without rebuilding your stack.
 
+NeuralCache is an opinionated, stateful reranking layer designed to increase practical usefulness of RAG retrieval results by remembering what historically mattered, decaying stale signals, maintaining diversity, and optimizing compute via intelligent gating. The repository is production-minded (CI, packaging, adapters, metrics) yet approachable with minimal dependencies out of the box. Its architecture cleanly separates scoring components, adapters, and API surfaces, making it a solid foundation for iterative improvement and integration into existing LLM pipelines.
+
 > This repository open-sources the NeuralCache reranker. The broader “Cognitive Tetrad” engine remains proprietary IP and is not included here.
 
 ---
