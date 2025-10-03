@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file. The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.3.0] - 2025-09-28
+## [0.3.1] - 2025-10-03
+### Added
+- SECURITY.md with disclosure process, supported versions guidance, and dependency audit integration (pip-audit)
+- Optional extras separation clarified: `adapters`, `ops`, `embeddings` now explicitly documented in README
+- README summary paragraph positioning NeuralCache as opinionated, stateful reranking layer
+
+### Changed
+- Build bootstrap hardening: enforce safe pip range excluding 25.2 (GHSA-4xh5-x5gv-qwph) and updated setuptools minimum
+- CI workflow now upgrades both pip and setuptools prior to installation; pip-audit runs post-install
+
+### Fixed
+- Prevent accidental install of vulnerable pip version 25.2 by pinning `<25.2`
+- Improved alignment between PyPI metadata and README summary
+
+### Notes
+- Next minor (0.4.x) will introduce formal API versioning header, deterministic mode, standardized error envelopes, and scoring spec documentation (tracked in issues)
+
 ### Added
 - Cognitive gating layer with entropy-aware candidate trimming and configuration overrides
 - Expanded API surface via `server_plus` with batch reranking and Prometheus metrics endpoints
