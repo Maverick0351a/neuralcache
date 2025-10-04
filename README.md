@@ -200,8 +200,9 @@ benefiting from adaptive reranking.
 | `NEURALCACHE_GATING_TEMPERATURE` | Softmax temperature when estimating entropy | `1.0` |
 | `NEURALCACHE_DETERMINISTIC` | Force deterministic reranks (seed RNG, disable exploration) | `false` |
 | `NEURALCACHE_DETERMINISTIC_SEED` | Seed used when deterministic mode is enabled | `1337` |
+| `NEURALCACHE_EPSILON` | Override ε-greedy exploration rate (0-1). Ignored when deterministic. | _unset_ |
 
-Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation.
+Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation. `NEURALCACHE_EPSILON` (when set) takes precedence over `epsilon_greedy` setting unless deterministic mode is active.
 
 Persistence happens automatically using SQLite (or JSON fallback) so narrative and pheromone stores survive restarts. Point `NEURALCACHE_STORAGE_DIR` at shared storage for multi-worker deployments, or import `SQLiteState` directly if you need to wire the persistence layer into an existing app container. Under the hood the SQLite state:
 

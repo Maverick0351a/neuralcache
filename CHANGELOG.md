@@ -5,22 +5,10 @@ All notable changes to this project will be documented in this file. The format 
 ## [0.3.0] - 2025-09-28
 ## [0.3.1] - 2025-10-03
 ### Added
-- SECURITY.md with disclosure process, supported versions guidance, and dependency audit integration (pip-audit)
-- Optional extras separation clarified: `adapters`, `ops`, `embeddings` now explicitly documented in README
-- README summary paragraph positioning NeuralCache as opinionated, stateful reranking layer
-- Structured API success + error envelopes with standardized error codes (see README)
-- Scoring pipeline specification (`docs/SCORING_MODEL.md`) detailing dense, narrative, pheromone, MMR, and exploration fusion formula
-- Sample evaluation dataset (`data/sample_eval.jsonl`) for quick Context-Use@K smoke tests
-- Response versioning headers (`X-NeuralCache-API-Version` + compatibility alias) and initial versioning policy doc (`docs/VERSIONING.md`)
 
 ### Changed
+- Configurable epsilon override via `NEURALCACHE_EPSILON` environment variable (validated range 0-1); ignored when deterministic mode is enabled. Exposed effective value in debug envelope as `epsilon_used`.
 - Build bootstrap hardening: enforce safe pip range excluding 25.2 (GHSA-4xh5-x5gv-qwph) and updated setuptools minimum
-- CI workflow now upgrades both pip and setuptools prior to installation; pip-audit runs post-install
-- Broadened dependency ranges (FastAPI, Starlette, Uvicorn) to reduce upgrade churn while retaining safety bounds
-- Introduced initial coverage gate (CI fails below 67%) with plan to ratchet upward in subsequent releases
-- Background retention sweep (configurable via `NEURALCACHE_STORAGE_RETENTION_SWEEP_INTERVAL_S` and `..._SWEEP_ON_START`) to periodically purge stale narrative + pheromone state
-- Deterministic mode flags (`NEURALCACHE_DETERMINISTIC`, `NEURALCACHE_DETERMINISTIC_SEED`) with debug exposure of `deterministic` + `epsilon_used`
-
 ### Fixed
 - Prevent accidental install of vulnerable pip version 25.2 by pinning `<25.2`
 - Improved alignment between PyPI metadata and README summary

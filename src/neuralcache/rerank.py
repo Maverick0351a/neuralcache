@@ -16,6 +16,7 @@ from .pheromone import PheromoneStore
 from .similarity import batched_cosine_sims, embed_corpus, safe_normalize
 from .storage.sqlite_state import SQLiteState
 from .types import Document, ScoredDocument
+import os
 
 
 def _safe_float(value: Any, default: float) -> float:
@@ -285,7 +286,15 @@ class Reranker:
         remaining_positions = set(range(effective_candidate_count))
 
         # ε-greedy exploration: occasionally pick a random item
+        override = os.getenv("NEURALCACHE_EPSILON")
         epsilon = 0.0 if self.settings.deterministic else self.settings.epsilon_greedy
+        if override is not None and not self.settings.deterministic:
+            try:
+                val = float(override)
+                if 0.0 <= val <= 1.0:
+                    epsilon = val
+            except ValueError:  # pragma: no cover
+                pass
         mmr_lam = float(mmr_lambda if 0.0 <= mmr_lambda <= 1.0 else 0.5)
 
         def mmr_gain(pos: int) -> float:
