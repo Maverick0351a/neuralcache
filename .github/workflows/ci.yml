@@ -45,7 +45,7 @@ jobs:
         run: mypy src
 
       - name: Pytest (with coverage gate)
-        run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml --cov-fail-under=81
+        run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml --cov-fail-under=84
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4

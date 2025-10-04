@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file. The format 
 ### Added
 - Retention telemetry endpoint `/metrics/retention` exposing sweep counters & timestamps
 - `mmr_lambda_default` setting (`NEURALCACHE_MMR_LAMBDA_DEFAULT`) and debug field `mmr_lambda_used`
-- Expanded test suite (gating modes, CR path fallback, narrative success gate, feedback error envelope, pheromone JSON persistence, similarity utilities, rerank feedback flows) raising coverage to 81% and CI gate accordingly.
+- Expanded test suite (gating modes, CR path fallback, narrative success gate, feedback error envelope, pheromone JSON persistence, similarity utilities, rerank feedback flows, encoder backend fallbacks, SQLite persistence) raising coverage to 84% and CI gate accordingly.
 
 ### Changed
 - Migrated startup/shutdown hooks to FastAPI lifespan context (removes deprecation warnings)
