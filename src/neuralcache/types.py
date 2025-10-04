@@ -66,6 +66,8 @@ class ScoredDocument(Document):
 
 class RerankDebug(BaseModel):
     gating: dict[str, Any] | None = None
+    deterministic: bool | None = None
+    epsilon_used: float | None = None
 
 
 class ErrorInfo(BaseModel):

@@ -222,7 +222,11 @@ async def rerank(
         limited = scored[: min(req.top_k, len(scored))]
         _remember_scored(limited)
         payload = [doc.model_dump() for doc in limited]
-        debug_model = RerankDebug(gating=_extract_gating_debug(debug_payload))
+        debug_model = RerankDebug(
+            gating=_extract_gating_debug(debug_payload),
+            deterministic=debug_payload.get("deterministic"),
+            epsilon_used=debug_payload.get("epsilon_used"),
+        )
         return JSONResponse(
             RerankResponse(results=[ScoredDocument(**doc) for doc in payload], debug=debug_model).model_dump()
         )
@@ -282,7 +286,11 @@ async def rerank_batch(
             limited = scored[: min(req.top_k, len(scored))]
             _remember_scored(limited)
             payload = [doc.model_dump() for doc in limited]
-            debug_model = RerankDebug(gating=_extract_gating_debug(debug_payload))
+            debug_model = RerankDebug(
+                gating=_extract_gating_debug(debug_payload),
+                deterministic=debug_payload.get("deterministic"),
+                epsilon_used=debug_payload.get("epsilon_used"),
+            )
             results.append(
                 BatchRerankResponseItem(
                     results=[ScoredDocument(**doc) for doc in payload], debug=debug_model

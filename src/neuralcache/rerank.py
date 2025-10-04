@@ -49,6 +49,12 @@ def _safe_int(value: Any, default: int) -> int:
 class Reranker:
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
+        if self.settings.deterministic:
+            try:  # pragma: no cover
+                random.seed(int(self.settings.deterministic_seed))
+                np.random.seed(int(self.settings.deterministic_seed))
+            except Exception:  # pragma: no cover
+                pass
         self.encoder = create_encoder(
             self.settings.embedding_backend,
             dim=self.settings.narrative_dim,
@@ -253,6 +259,7 @@ class Reranker:
 
         if debug is not None:
             debug["gating"] = debug_gating
+            debug["deterministic"] = bool(self.settings.deterministic)
 
         if effective_candidate_count == 0:
             return []
@@ -278,7 +285,7 @@ class Reranker:
         remaining_positions = set(range(effective_candidate_count))
 
         # ε-greedy exploration: occasionally pick a random item
-        epsilon = self.settings.epsilon_greedy
+        epsilon = 0.0 if self.settings.deterministic else self.settings.epsilon_greedy
         mmr_lam = float(mmr_lambda if 0.0 <= mmr_lambda <= 1.0 else 0.5)
 
         def mmr_gain(pos: int) -> float:
@@ -315,6 +322,8 @@ class Reranker:
             )
             for pos in order_positions
         ]
+        if debug is not None:
+            debug["epsilon_used"] = float(epsilon)
 
         # Record exposure for top-K
         self.pher.record_exposure([sd.id for sd in scored[: min(len(scored), 10)]])

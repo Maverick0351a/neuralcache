@@ -198,6 +198,8 @@ benefiting from adaptive reranking.
 | `NEURALCACHE_GATING_MIN_CANDIDATES` | Lower bound for rerank candidates | `8` |
 | `NEURALCACHE_GATING_MAX_CANDIDATES` | Upper bound for rerank candidates | `48` |
 | `NEURALCACHE_GATING_TEMPERATURE` | Softmax temperature when estimating entropy | `1.0` |
+| `NEURALCACHE_DETERMINISTIC` | Force deterministic reranks (seed RNG, disable exploration) | `false` |
+| `NEURALCACHE_DETERMINISTIC_SEED` | Seed used when deterministic mode is enabled | `1337` |
 
 Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation.
 
