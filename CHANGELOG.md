@@ -8,10 +8,14 @@ All notable changes to this project will be documented in this file. The format 
 - SECURITY.md with disclosure process, supported versions guidance, and dependency audit integration (pip-audit)
 - Optional extras separation clarified: `adapters`, `ops`, `embeddings` now explicitly documented in README
 - README summary paragraph positioning NeuralCache as opinionated, stateful reranking layer
+- Structured API success + error envelopes with standardized error codes (see README)
+- Scoring pipeline specification (`docs/SCORING_MODEL.md`) detailing dense, narrative, pheromone, MMR, and exploration fusion formula
+- Sample evaluation dataset (`data/sample_eval.jsonl`) for quick Context-Use@K smoke tests
 
 ### Changed
 - Build bootstrap hardening: enforce safe pip range excluding 25.2 (GHSA-4xh5-x5gv-qwph) and updated setuptools minimum
 - CI workflow now upgrades both pip and setuptools prior to installation; pip-audit runs post-install
+- Broadened dependency ranges (FastAPI, Starlette, Uvicorn) to reduce upgrade churn while retaining safety bounds
 
 ### Fixed
 - Prevent accidental install of vulnerable pip version 25.2 by pinning `<25.2`
@@ -19,6 +23,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Notes
 - Next minor (0.4.x) will introduce formal API versioning header, deterministic mode, standardized error envelopes, and scoring spec documentation (tracked in issues)
+	(Structured envelopes + scoring spec landed early in 0.3.1; versioning header + deterministic mode still pending.)
 
 ### Added
 - Cognitive gating layer with entropy-aware candidate trimming and configuration overrides

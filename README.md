@@ -234,7 +234,31 @@ Use the generated CSV to inspect which queries improved, regressions, and latenc
 
 ### Sample datasets
 
-The previous synthetic Context-Use demo is being redesigned. We’ll publish a refreshed walkthrough once the new baseline is validated. In the meantime you can point `scripts/eval_context_use.py` at your own JSONL datasets to measure uplift between any two rerankers.
+We ship a small, neutral illustrative dataset at `data/sample_eval.jsonl` (5 queries) covering:
+
+- Stigmergy concept recall
+- MMR rationale
+- ε-greedy exploration purpose
+- Pheromone decay motivation
+- Narrative memory function
+
+Each line contains:
+
+```json
+{"query": "...", "docs": [{"id": "d1", "text": "..."}, ...], "answer": "..."}
+```
+
+Run a smoke eval against a locally running API:
+
+```bash
+python scripts/eval_context_use.py \
+  --api http://127.0.0.1:8080 \
+  --data data/sample_eval.jsonl \
+  --out reports/sample_eval.csv \
+  --top-k 3
+```
+
+Inspect `reports/sample_eval.csv` for per-query hits. Extend by appending more JSONL lines that follow the same schema; avoid sensitive data—this file is published.
 
 ---
 
