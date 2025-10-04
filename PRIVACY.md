@@ -22,8 +22,8 @@ written inside `storage_dir`:
 | File | Contents | Privacy Considerations |
 |------|----------|------------------------|
 | `neuralcache.db` | SQLite metadata (if future features persist more) | Currently minimal; avoid storing PII here |
-| `narrative.json` | Narrative EMA vector(s) (currently global, roadmap: namespaced) | Numerical floats only; cannot reconstruct raw text |
-| `pheromones.json` | Document exposure/decay metadata (doc IDs & timestamps) | Ensure doc IDs are non-sensitive (hash if needed) |
+| `narrative.json` / `narrative.{namespace}.json` | Narrative EMA vector(s) (global or per-namespace) | Numerical floats only; cannot reconstruct raw text |
+| `pheromones.json` / `pheromones.{namespace}.json` | Document exposure/decay metadata (doc IDs & timestamps) | Ensure doc IDs are non-sensitive (hash if needed) |
 
 Embeddings for documents are NOT persisted. Only aggregate statistical summaries
 and per-doc exposure timestamps are stored.
@@ -46,7 +46,7 @@ boundary; run separate deployments for strict data isolation.
 1. Identify target namespace(s) requiring deletion.
 2. If persistence is enabled, stop the service to prevent new writes.
 3. Remove or archive `narrative.json` and `pheromones.json`.
-4. (If future namespaced persistence) remove only the namespace block / file.
+4. If namespaced persistence is enabled, remove only the specific `narrative.{namespace}.json` and `pheromones.{namespace}.json` files.
 5. Restart the service; new state will be rebuilt lazily.
 
 For immediate in-memory purge without restart (future feature), an admin endpoint
@@ -86,9 +86,9 @@ Out-of-scope for current version:
 
 | Area | Planned | Priority |
 |------|---------|----------|
-| Namespaced persistence | Yes | High |
-| Namespace eviction / purge endpoint | Yes | Medium |
-| Per-namespace metrics labeling | Yes | Medium |
+| Namespaced persistence | Delivered (JSON) | Follow-up: SQLite partitioning |
+| Namespace eviction / purge endpoint | Partial (LRU cap) | Add admin purge endpoint |
+| Per-namespace metrics labeling | Delivered (opt-in label) | Add guardrails (cardinality alerts) |
 | Configurable doc ID hashing strategy | Investigate | Medium |
 | Differential privacy narrative updates | Investigate | Low |
 

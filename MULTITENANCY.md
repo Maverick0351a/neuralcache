@@ -13,7 +13,9 @@ X-NeuralCache-Namespace: <name>
 ```
 
 If omitted, the `default` namespace is used. A per-namespace `Reranker` instance
-is created on first use and retained in-memory for subsequent requests.
+is created on first use and retained in-memory for subsequent requests. Optional
+LRU eviction and namespaced persistence can now constrain memory growth and
+provide file-level state isolation.
 
 | Aspect              | Isolated Per Namespace | Notes |
 |---------------------|------------------------|-------|
@@ -21,7 +23,7 @@ is created on first use and retained in-memory for subsequent requests.
 | Pheromone tracking  | ✅                     | Exposure/decay history separate |
 | Feedback updates    | ✅                     | Selected doc reinforcement scoped |
 | CR Index (future)   | ⏳ Planned             | Currently shared; future path: per-namespace index selection |
-| Metrics aggregation | 🚧 Partial             | Global metrics currently aggregate all namespaces |
+| Metrics aggregation | ✅ (opt-in labels)      | Enable `NEURALCACHE_METRICS_NAMESPACE_LABEL` for per-namespace label |
 
 ## Namespace Semantics
 
@@ -36,31 +38,37 @@ Invalid names result in `400 BAD_REQUEST` with error code `BAD_REQUEST` and mess
 
 ## Lifecycle & Memory Considerations
 
-A namespace is instantiated lazily and kept indefinitely. There is no automatic
-LRU eviction today. Deployments with highly cardinal tenant identifiers should
-introduce an external lifecycle controller or run separate service instances.
+Namespaces are instantiated lazily. When `NEURALCACHE_MAX_NAMESPACES` is set,
+an LRU policy (`NEURALCACHE_NAMESPACE_EVICTION_POLICY=lru`) evicts the least
+recently used non-default namespace once the cap is reached. The default
+namespace is never evicted.
 
-### Potential Memory Growth
+### Memory Footprint
 
-Each namespace maintains:
+Each active namespace maintains:
 - Narrative EMA vector (float32 length = `narrative_dim`)
 - Pheromone map (per document ID touched in that namespace)
 - Feedback cache references (shared global LRU mapping doc IDs to last rerank batch)
 
-If you expect thousands of ephemeral namespaces, consider:
-- Fronting the service with a routing layer that shards namespaces across pods.
-- Periodically restarting pods (stateless if persistence disabled) and relying on retention.
-- Contributing an eviction strategy (e.g., size + inactivity timeout) upstream.
+If you expect very high namespace churn:
+- Set `NEURALCACHE_MAX_NAMESPACES` to a reasonable ceiling.
+- Tune retention sweep to keep adaptive state trimmed.
+- Consider sharding namespaces across pods if cardinality still exceeds operational limits.
 
 ## Persistence & Retention
 
-Retention sweeping currently scans all instantiated namespace rerankers and applies
-narrative/pheromone purging according to `NEURALCACHE_STORAGE_RETENTION_DAYS`.
+Retention sweeping scans all live namespace rerankers and applies purge rules
+based on `NEURALCACHE_STORAGE_RETENTION_DAYS`.
 
-Persistence paths (`narrative_store_path`, `pheromone_store_path`) remain *shared*.
-If persistence is enabled, serialization merges namespace state is NOT yet implemented.
-For multi-tenant deployments needing persisted isolation, run separate processes
-or disable persistence until namespaced persistence lands.
+When `NEURALCACHE_NAMESPACED_PERSISTENCE=true`, per-namespace JSON files are
+written using templates:
+```
+NEURALCACHE_NARRATIVE_STORE_TEMPLATE=narrative.{namespace}.json
+NEURALCACHE_PHEROMONE_STORE_TEMPLATE=pheromones.{namespace}.json
+```
+These enable selective archival or deletion of a single tenant's adaptive state.
+SQLite mode still provides a shared durable store; namespaced JSON is most useful
+when operating in lightweight file persistence or needing file-level separation.
 
 ## Security & Isolation Guarantees
 
@@ -73,11 +81,11 @@ Logical isolation only—data is resident in the same process address space:
 
 | Feature | Status | Planned Improvement |
 |---------|--------|--------------------|
-| Namespaced reranker registry | ✅ | Add LRU eviction / idle culling |
-| Namespaced persistence | ❌ | Persist per-namespace narrative & pheromones |
-| Namespaced metrics | 🚧 | Per-namespace metrics labels / filtering |
-| Namespaced CR index | ❌ | Optional per-namespace index load & selection |
-| Hard quotas (max namespaces) | ❌ | Enforce upper bound via config |
+| Namespaced reranker registry | ✅ | Potential future: idle timeout eviction |
+| Namespaced persistence | ✅ | Potential future: SQLite partitioning per namespace |
+| Namespaced metrics | ✅ (labels) | Future: cardinality safeguards & sampling |
+| Namespaced CR index | ⏳ Planned | Lazy load CR index per namespace if needed |
+| Hard quotas (max namespaces) | ✅ | Future: dual criteria (count + memory) |
 
 ## Configuration Summary
 
@@ -86,6 +94,12 @@ Logical isolation only—data is resident in the same process address space:
 | `NEURALCACHE_NAMESPACE_HEADER` | Header key to select namespace | `X-NeuralCache-Namespace` |
 | `NEURALCACHE_DEFAULT_NAMESPACE` | Namespace when header omitted | `default` |
 | `NEURALCACHE_NAMESPACE_PATTERN` | Regex for validation | `^[a-zA-Z0-9_.-]{1,64}$` |
+| `NEURALCACHE_MAX_NAMESPACES` | Max in-memory namespaces (including default) | _unset_ |
+| `NEURALCACHE_NAMESPACE_EVICTION_POLICY` | Eviction policy (`lru`) | `lru` |
+| `NEURALCACHE_NAMESPACED_PERSISTENCE` | Enable per-namespace JSON stores | `false` |
+| `NEURALCACHE_NARRATIVE_STORE_TEMPLATE` | Narrative file template | `narrative.{namespace}.json` |
+| `NEURALCACHE_PHEROMONE_STORE_TEMPLATE` | Pheromone file template | `pheromones.{namespace}.json` |
+| `NEURALCACHE_METRICS_NAMESPACE_LABEL` | Add `namespace` label to rerank metrics | `false` |
 
 ## Examples
 

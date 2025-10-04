@@ -10,7 +10,7 @@
 [![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Maverick0351a/neuralcache?style=social)](https://github.com/Maverick0351a/neuralcache/stargazers)
-[![Coverage](https://img.shields.io/badge/coverage-88%25-yellow)](./coverage-policy)
+[![Coverage](https://img.shields.io/badge/coverage-89%25-yellow)](./coverage-policy)
 
 NeuralCache is a lightweight reranker for RAG pipelines that *actually remembers what helped*. It blends dense semantic similarity with a narrative memory of past wins and stigmergic pheromones that reward helpful passages while decaying stale ones—then spices in MMR diversity and ε-greedy exploration. The result: more relevant context for your LLM without rebuilding your stack.
 
@@ -123,13 +123,19 @@ NeuralCache now supports lightweight logical isolation using a namespace header:
 X-NeuralCache-Namespace: tenantA
 ```
 
-If omitted, the `default` namespace is used. Narrative + pheromone feedback effects do not bleed across namespaces. See `MULTITENANCY.md` for details, limitations (no eviction yet, shared persistence), and roadmap.
+If omitted, the `default` namespace is used. Narrative + pheromone feedback effects do not bleed across namespaces. See `MULTITENANCY.md` for deeper design notes.
 
 | Setting | Purpose | Default |
 |---------|---------|---------|
 | `NEURALCACHE_NAMESPACE_HEADER` | Header key to read namespace | `X-NeuralCache-Namespace` |
 | `NEURALCACHE_DEFAULT_NAMESPACE` | Fallback namespace when header missing | `default` |
 | `NEURALCACHE_NAMESPACE_PATTERN` | Validation regex (400 on mismatch) | `^[a-zA-Z0-9_.-]{1,64}$` |
+| `NEURALCACHE_MAX_NAMESPACES` | Optional cap on total in-memory namespaces (including default); LRU evicts oldest non-default when exceeded | _unset_ |
+| `NEURALCACHE_NAMESPACE_EVICTION_POLICY` | Eviction strategy (currently only `lru`) | `lru` |
+| `NEURALCACHE_METRICS_NAMESPACE_LABEL` | If `true`, adds `namespace` label to rerank metrics families | `false` |
+| `NEURALCACHE_NAMESPACED_PERSISTENCE` | If `true`, per-namespace narrative + pheromone JSON files are used | `false` |
+| `NEURALCACHE_NARRATIVE_STORE_TEMPLATE` | Template for per-namespace narrative file | `narrative.{namespace}.json` |
+| `NEURALCACHE_PHEROMONE_STORE_TEMPLATE` | Template for per-namespace pheromone file | `pheromones.{namespace}.json` |
 
 Invalid namespaces return a standardized error envelope:
 
@@ -298,6 +304,9 @@ neuralcache/
 - ✅ SQLite persistence (drop-in)
 - ✅ Batch `/rerank` endpoint
 - ✅ LangChain + LlamaIndex adapters
+- ✅ Namespace eviction (LRU)
+- ✅ Namespaced persistence (optional JSON templates)
+- ✅ Metrics namespace labeling (opt-in)
 - ☐ Semantic Context-Use@K metric
 - ☐ Prometheus/OpenTelemetry exporters
 - ☐ Optional Rust / Numba core for hot loops
@@ -316,10 +325,56 @@ ruff check && mypy && pytest --cov=neuralcache --cov-report=term-missing
 
 - Look for [good first issues](https://github.com/Maverick0351a/neuralcache/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 - Add test coverage for user-visible changes.
-- Coverage gate currently enforces >=88%. We'll continue to ratchet this upward as core adaptive components gain additional tests (latest uplift added narrative purge stale, CR empty candidate fallback, encoder unknown-backend warning, rate limiting & API auth envelopes, batch gating debug, plus prior CR persistence, malformed envelopes, retention sweeper, pheromone purge, gating overrides, epsilon override, and narrative resize/skip branches).
+- Coverage gate currently enforces >=89%. We'll continue to ratchet this upward as core adaptive components gain additional tests (latest uplift added namespace isolation, eviction, namespaced persistence, metrics namespace labeling, narrative purge stale, CR empty candidate fallback, encoder unknown-backend warning, rate limiting & API auth envelopes, batch gating debug, malformed envelopes, retention sweeper, pheromone purge, gating overrides, epsilon override, and narrative resize/skip branches).
+
+### Namespace eviction
+
+Set `NEURALCACHE_MAX_NAMESPACES` to constrain memory growth in multi-tenant scenarios (edge cases where thousands of low-traffic tenants appear). When the cap is reached, the least recently used non-default namespace is evicted (policy `lru`). The default namespace is never evicted. Access updates recency automatically.
+
+### Metrics namespace labeling
+
+Opt-in via `NEURALCACHE_METRICS_NAMESPACE_LABEL=true` to export parallel Prometheus metrics with a `namespace` label. Useful for per-tenant latency SLOs and request volume dashboards. When disabled, metrics remain cardinality-safe for large tenant counts.
+
+### Namespaced persistence
+
+Enable `NEURALCACHE_NAMESPACED_PERSISTENCE=true` to write per-namespace narrative + pheromone JSON stores using the templates:
+
+```
+NEURALCACHE_NARRATIVE_STORE_TEMPLATE=narrative.{namespace}.json
+NEURALCACHE_PHEROMONE_STORE_TEMPLATE=pheromones.{namespace}.json
+```
+
+This allows selective archival or scrubbing of a single tenant’s adaptive state. SQLite mode continues to provide shared durable state; the namespaced JSON layer is most useful when running the lightweight default (non-SQLite) persistence path or when you want filesystem-level isolation.
 - PRs with docs, demos, and eval improvements are extra appreciated.
 
 Optionally, join the discussion in **#neuralcache** on Discord (coming soon—watch this space).
+
+---
+
+## Upgrading
+
+### 0.3.2
+
+Release 0.3.2 introduces multi-tenant operational features. All changes are **backward compatible**; existing deployments that do nothing will behave exactly as before.
+
+Key additions:
+
+- Namespace cap & eviction: set `NEURALCACHE_MAX_NAMESPACES` (with policy `NEURALCACHE_NAMESPACE_EVICTION_POLICY=lru`) to bound memory; default is unlimited.
+- Namespaced persistence: opt-in with `NEURALCACHE_NAMESPACED_PERSISTENCE=true` to emit per-namespace JSON state files (templates overrideable with `NEURALCACHE_NARRATIVE_STORE_TEMPLATE` / `NEURALCACHE_PHEROMONE_STORE_TEMPLATE`).
+- Metrics namespace labeling: enable `NEURALCACHE_METRICS_NAMESPACE_LABEL=true` to expose parallel Prometheus metric families with a `namespace` label. Leave `false` to avoid high-cardinality metrics.
+- Version constant bumped to 0.3.2 (`neuralcache.__version__`).
+
+No breaking schema migrations were required. SQLite schema version unchanged. If you previously relied on the absence of eviction, simply leave `NEURALCACHE_MAX_NAMESPACES` unset (or remove it) and behavior matches 0.3.1.
+
+### Upgrading checklist
+
+1. Bump dependency: `pip install --upgrade neuralcache`.
+2. (Optional) Export per-tenant metrics: set `NEURALCACHE_METRICS_NAMESPACE_LABEL=true` (assess Prometheus cardinality first).
+3. (Optional) Constrain namespace memory: set `NEURALCACHE_MAX_NAMESPACES=<cap>`.
+4. (Optional) Enable namespaced JSON persistence: `NEURALCACHE_NAMESPACED_PERSISTENCE=true` (ensure filesystem ACLs align with privacy expectations).
+5. Restart your API workers; confirm `/metrics` and rerank endpoints behave as expected.
+
+Future versions will continue to maintain stability for existing `Settings` fields; newly added fields default to safe inactive behavior unless explicitly enabled.
 
 ---
 

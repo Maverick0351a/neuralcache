@@ -2,11 +2,15 @@
 
 All notable changes to this project will be documented in this file. The format roughly follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.3.2] - Unreleased
+## [0.3.2] - 2025-10-03
 ### Added
 - Retention telemetry endpoint `/metrics/retention` exposing sweep counters & timestamps
 - `mmr_lambda_default` setting (`NEURALCACHE_MMR_LAMBDA_DEFAULT`) and debug field `mmr_lambda_used`
-- Expanded test suite (gating modes, CR path fallback, narrative success gate, feedback error envelope, pheromone JSON persistence, similarity utilities, rerank feedback flows, encoder backend fallbacks, SQLite persistence, CR index roundtrip, malformed request envelopes, retention sweeper, pheromone purge JSON path, gating overrides, epsilon override env, narrative resize + skip branches, narrative purge stale path, CR empty candidate fallback, encoder unknown-backend warning path, rate limiting + API token auth envelopes, batch gating debug) raising coverage to 88% and CI gate accordingly.
+- Namespace-aware metrics labeling toggle via `metrics_namespace_label` setting (adds optional `namespace` label to rerank metrics families)
+- Multi-tenant namespace registry with configurable `max_namespaces` and `namespace_eviction_policy` (LRU) for bounded memory
+- Namespaced persistence option (`namespaced_persistence`) producing per-namespace narrative & pheromone JSON stores using template settings
+- Documentation: updated `MULTITENANCY.md`, `PRIVACY.md` with eviction + namespaced persistence details; deprecation banner added to `README_NEXT.md`
+- Expanded test suite (metrics namespace labeling, namespace eviction behavior, namespaced persistence artifacts plus prior additions) raising coverage to 89% and CI gate accordingly.
 
 ### Changed
 - Migrated startup/shutdown hooks to FastAPI lifespan context (removes deprecation warnings)

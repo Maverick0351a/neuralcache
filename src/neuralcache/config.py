@@ -86,4 +86,34 @@ class Settings(BaseSettings):
         description="Regex pattern namespace names must match"
     )
 
+    # Metrics / observability
+    metrics_namespace_label: bool = Field(
+        default=False,
+        description="If true and prometheus available, include namespace label in rerank metrics",
+    )
+
+    # Namespace eviction
+    max_namespaces: int | None = Field(
+        default=None,
+        description="If set, maximum number of namespaces to keep resident; LRU eviction applied to non-default when exceeded"
+    )
+    namespace_eviction_policy: Literal["lru"] = Field(
+        default="lru",
+        description="Eviction policy for namespaces when max_namespaces is reached. Only 'lru' currently supported."
+    )
+
+    # Namespaced persistence
+    namespaced_persistence: bool = Field(
+        default=False,
+        description="If true, narrative/pheromone JSON persistence paths are templated per-namespace"
+    )
+    narrative_store_template: str = Field(
+        default="narrative.{namespace}.json",
+        description="Template for per-namespace narrative store file when namespaced_persistence true"
+    )
+    pheromone_store_template: str = Field(
+        default="pheromones.{namespace}.json",
+        description="Template for per-namespace pheromone store file when namespaced_persistence true"
+    )
+
     model_config = SettingsConfigDict(env_prefix="NEURALCACHE_", env_file=".env", extra="ignore")

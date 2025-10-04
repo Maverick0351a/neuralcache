@@ -1,4 +1,11 @@
-# NeuralCache Add-ons
+# NeuralCache Add-ons (Deprecated)
+
+> [!NOTE]
+> This document described features that are now merged into the core distribution:
+> batch reranking, Prometheus metrics, SQLite persistence, and evaluation tooling
+> all live in the main `README.md`. Keep this file for historical context; new
+> improvements and settings (namespace eviction, namespaced persistence, metrics
+> namespace labeling) are documented in the primary README and related docs.
 
 This drop extends the base NeuralCache scaffold with batch reranking, Prometheus-ready
 metrics, durable SQLite persistence, and an evaluation tool for Context-Use@K uplift.

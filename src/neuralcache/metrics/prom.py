@@ -19,6 +19,8 @@ except Exception:  # pragma: no cover - prefer graceful fallback
         status: str,
         duration: float,
         doc_count: int | None = None,
+        namespace: str | None = None,
+        include_namespace: bool | None = None,
     ) -> None:
         return None
 
@@ -34,10 +36,19 @@ except Exception:  # pragma: no cover - prefer graceful fallback
 else:  # pragma: no cover - exercised when prometheus_client is installed
     PROMETHEUS_AVAILABLE = True
     _REGISTRY = CollectorRegistry()
+    # We dynamically decide label cardinality at import based on an env flag would be cleaner,
+    # but we expose a runtime path below. For simplicity we create both metric variants lazily.
     _RERANK_LATENCY = Histogram(
         "neuralcache_rerank_latency_seconds",
         "Latency (in seconds) spent handling rerank endpoints.",
         labelnames=("endpoint",),
+        registry=_REGISTRY,
+        buckets=(0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0),
+    )
+    _RERANK_LATENCY_NS = Histogram(
+        "neuralcache_rerank_latency_seconds_namespaced",
+        "Latency with namespace label (experimental).",
+        labelnames=("endpoint", "namespace"),
         registry=_REGISTRY,
         buckets=(0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0),
     )
@@ -47,10 +58,23 @@ else:  # pragma: no cover - exercised when prometheus_client is installed
         labelnames=("endpoint", "status"),
         registry=_REGISTRY,
     )
+    _RERANK_REQUESTS_NS = Counter(
+        "neuralcache_rerank_requests_namespaced_total",
+        "Total rerank requests processed (namespaced).",
+        labelnames=("endpoint", "status", "namespace"),
+        registry=_REGISTRY,
+    )
     _DOCS_PER_REQUEST = Histogram(
         "neuralcache_rerank_documents_per_request",
         "Documents supplied in each rerank invocation.",
         labelnames=("endpoint",),
+        registry=_REGISTRY,
+        buckets=(1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0),
+    )
+    _DOCS_PER_REQUEST_NS = Histogram(
+        "neuralcache_rerank_documents_per_request_namespaced",
+        "Documents per rerank (namespaced variant).",
+        labelnames=("endpoint", "namespace"),
         registry=_REGISTRY,
         buckets=(1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0),
     )
@@ -75,11 +99,19 @@ else:  # pragma: no cover - exercised when prometheus_client is installed
         status: str,
         duration: float,
         doc_count: int | None = None,
+        namespace: str | None = None,
+        include_namespace: bool = False,
     ) -> None:
-        _RERANK_LATENCY.labels(endpoint=endpoint).observe(max(duration, 0.0))
-        _RERANK_REQUESTS.labels(endpoint=endpoint, status=status).inc()
-        if doc_count is not None:
-            _DOCS_PER_REQUEST.labels(endpoint=endpoint).observe(float(max(doc_count, 0)))
+        if include_namespace and namespace:
+            _RERANK_LATENCY_NS.labels(endpoint=endpoint, namespace=namespace).observe(max(duration, 0.0))
+            _RERANK_REQUESTS_NS.labels(endpoint=endpoint, status=status, namespace=namespace).inc()
+            if doc_count is not None:
+                _DOCS_PER_REQUEST_NS.labels(endpoint=endpoint, namespace=namespace).observe(float(max(doc_count, 0)))
+        else:
+            _RERANK_LATENCY.labels(endpoint=endpoint).observe(max(duration, 0.0))
+            _RERANK_REQUESTS.labels(endpoint=endpoint, status=status).inc()
+            if doc_count is not None:
+                _DOCS_PER_REQUEST.labels(endpoint=endpoint).observe(float(max(doc_count, 0)))
 
     def record_context_use(endpoint: str, hits: int, total: int) -> None:
         safe_total = max(total, hits, 0)

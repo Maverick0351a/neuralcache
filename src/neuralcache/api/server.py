@@ -30,7 +30,7 @@ settings = Settings()
 
 # Namespace registry for multi-tenant isolation
 _namespace_lock = threading.RLock()
-_rerankers: dict[str, Reranker] = {}
+_rerankers: "OrderedDict[str, Reranker]" = OrderedDict()
 
 # Legacy default reranker for backward compatibility (root/default namespace)
 reranker = Reranker(settings=settings)
@@ -55,6 +55,11 @@ def _validate_namespace(ns: str) -> str:
 
 
 def get_reranker_for_namespace(namespace: str | None) -> Reranker:
+    """Return (and possibly create) the reranker for a namespace.
+
+    Implements LRU eviction when settings.max_namespaces is set. The default namespace
+    is never evicted. Recency is updated on each access (including creation).
+    """
     # Treat None or empty string as default without validation
     ns = (namespace or "").strip()
     if not ns:
@@ -63,9 +68,37 @@ def get_reranker_for_namespace(namespace: str | None) -> Reranker:
         ns = _validate_namespace(ns)
     with _namespace_lock:
         rk = _rerankers.get(ns)
-        if rk is None:
-            rk = Reranker(settings=settings)  # shared settings for now
-            _rerankers[ns] = rk
+        if rk is not None:
+            # Update recency
+            _rerankers.move_to_end(ns, last=True)
+            return rk
+
+        # Need to create. Enforce eviction if configured.
+        max_ns = settings.max_namespaces or 0
+        if max_ns > 0 and len(_rerankers) >= max_ns:
+            # Evict according to policy (currently only LRU)
+            if settings.namespace_eviction_policy == "lru":
+                for victim in list(_rerankers.keys()):
+                    if victim == settings.default_namespace:
+                        continue  # never evict default
+                    _rerankers.pop(victim, None)
+                    break  # evict one
+            # If only default exists and we still exceed, we'll just proceed (default retained)
+
+        # Prepare settings for this namespace. Clone base settings but optionally
+        # override persistence file paths if namespaced persistence is enabled.
+        ns_settings = settings
+        if settings.namespaced_persistence:
+            # Shallow copy via model_dump + model_validate to avoid mutating global singleton
+            data = settings.model_dump()
+            data["narrative_store_path"] = settings.narrative_store_template.format(namespace=ns)
+            data["pheromone_store_path"] = settings.pheromone_store_template.format(namespace=ns)
+            # Force JSON backend for namespaced persistence so per-namespace files are materialized
+            if data.get("storage_backend", "sqlite").lower() == "sqlite":
+                data["storage_backend"] = "json"
+            ns_settings = Settings(**data)
+        rk = Reranker(settings=ns_settings)
+        _rerankers[ns] = rk  # newest -> end
         return rk
 
 
@@ -302,6 +335,8 @@ async def rerank(
             status=status_label,
             duration=time.perf_counter() - start,
             doc_count=len(req.documents),
+            namespace=namespace or settings.default_namespace,
+            include_namespace=settings.metrics_namespace_label,
         )
         rk.settings.cr.on = previous_cr
 
@@ -372,6 +407,8 @@ async def rerank_batch(
             status=status_label,
             duration=time.perf_counter() - start,
             doc_count=total_docs,
+            namespace=namespace or settings.default_namespace,
+            include_namespace=settings.metrics_namespace_label,
         )
         rk.settings.cr.on = previous_cr
 
