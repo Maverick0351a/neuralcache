@@ -191,6 +191,8 @@ benefiting from adaptive reranking.
 | `NEURALCACHE_STORAGE_DIR` | Where SQLite + JSON state is stored | `storage/` |
 | `NEURALCACHE_STORAGE_PERSISTENCE_ENABLED` | Disable to keep narrative + pheromones in-memory only | `true` |
 | `NEURALCACHE_STORAGE_RETENTION_DAYS` | Days before old state is purged on boot (supports SQLite + JSON) | _unset_ |
+| `NEURALCACHE_STORAGE_RETENTION_SWEEP_INTERVAL_S` | Interval (seconds) for background retention sweeper (0 disables) | `0` |
+| `NEURALCACHE_STORAGE_RETENTION_SWEEP_ON_START` | Run a purge cycle synchronously at startup when true | `true` |
 | `NEURALCACHE_GATING_MODE` | Cognitive gate mode (`off`, `auto`, `on`) | `auto` |
 | `NEURALCACHE_GATING_THRESHOLD` | Uncertainty threshold for trimming | `0.45` |
 | `NEURALCACHE_GATING_MIN_CANDIDATES` | Lower bound for rerank candidates | `8` |

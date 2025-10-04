@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file. The format 
 - CI workflow now upgrades both pip and setuptools prior to installation; pip-audit runs post-install
 - Broadened dependency ranges (FastAPI, Starlette, Uvicorn) to reduce upgrade churn while retaining safety bounds
 - Introduced initial coverage gate (CI fails below 67%) with plan to ratchet upward in subsequent releases
+- Background retention sweep (configurable via `NEURALCACHE_STORAGE_RETENTION_SWEEP_INTERVAL_S` and `..._SWEEP_ON_START`) to periodically purge stale narrative + pheromone state
 
 ### Fixed
 - Prevent accidental install of vulnerable pip version 25.2 by pinning `<25.2`

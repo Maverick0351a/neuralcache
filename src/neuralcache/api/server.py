@@ -43,6 +43,52 @@ _feedback_lock = threading.Lock()
 _rate_lock = threading.Lock()
 _request_times: deque[float] = deque()
 
+_sweeper_stop = threading.Event()
+_sweeper_thread: threading.Thread | None = None
+
+
+def _retention_sweep_loop() -> None:
+    interval = max(0.0, settings.storage_retention_sweep_interval_s)
+    if interval <= 0:
+        return
+    while not _sweeper_stop.wait(interval):
+        try:
+            retention_days = settings.storage_retention_days
+            if retention_days is None or retention_days <= 0:
+                continue
+            retention_seconds = retention_days * 86400.0
+            # Purge stale narrative & pheromones via underlying stores
+            reranker.narr.purge_if_stale(retention_seconds)
+            reranker.pher.purge_older_than(retention_seconds)
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+
+@app.on_event("startup")
+def _start_retention_sweeper() -> None:
+    if settings.storage_retention_sweep_on_start:
+        # Execute one purge cycle synchronously if configured
+        try:
+            if settings.storage_retention_days and settings.storage_retention_days > 0:
+                retention_seconds = settings.storage_retention_days * 86400.0
+                reranker.narr.purge_if_stale(retention_seconds)
+                reranker.pher.purge_older_than(retention_seconds)
+        except Exception:
+            pass
+    if settings.storage_retention_sweep_interval_s > 0:
+        global _sweeper_thread
+        _sweeper_thread = threading.Thread(
+            target=_retention_sweep_loop, name="nc-retention-sweeper", daemon=True
+        )
+        _sweeper_thread.start()
+
+
+@app.on_event("shutdown")
+def _stop_retention_sweeper() -> None:  # pragma: no cover
+    _sweeper_stop.set()
+    if _sweeper_thread and _sweeper_thread.is_alive():
+        _sweeper_thread.join(timeout=1.0)
+
 
 def _build_gating_overrides(req: RerankRequest) -> dict[str, object] | None:
     overrides: dict[str, object] = {}

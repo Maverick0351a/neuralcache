@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     storage_db_name: str = "neuralcache.db"
     storage_persistence_enabled: bool = True
     storage_retention_days: float | None = None
+    storage_retention_sweep_interval_s: float = 0.0  # disabled if <=0
+    storage_retention_sweep_on_start: bool = True
     narrative_store_path: str = "narrative.json"
     pheromone_store_path: str = "pheromones.json"
 
