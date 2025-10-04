@@ -73,4 +73,17 @@ class Settings(BaseSettings):
 
     cr: CRSettings = CRSettings()
 
+    # Multi-tenancy / Namespace isolation
+    namespace_header: str = Field(
+        default="X-NeuralCache-Namespace",
+        description="HTTP header clients can set to select a namespace (tenant)"
+    )
+    default_namespace: str = Field(
+        default="default", description="Namespace used when none provided"
+    )
+    namespace_pattern: str = Field(
+        default=r"^[a-zA-Z0-9_.-]{1,64}$",
+        description="Regex pattern namespace names must match"
+    )
+
     model_config = SettingsConfigDict(env_prefix="NEURALCACHE_", env_file=".env", extra="ignore")

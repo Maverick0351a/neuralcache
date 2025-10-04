@@ -28,6 +28,14 @@ from ..types import (
 
 settings = Settings()
 
+# Namespace registry for multi-tenant isolation
+_namespace_lock = threading.RLock()
+_rerankers: dict[str, Reranker] = {}
+
+# Legacy default reranker for backward compatibility (root/default namespace)
+reranker = Reranker(settings=settings)
+_rerankers[settings.default_namespace] = reranker
+
 _sweeper_stop = threading.Event()
 _sweeper_thread: threading.Thread | None = None
 _retention_metrics: dict[str, float | int | None] = {
@@ -37,13 +45,39 @@ _retention_metrics: dict[str, float | int | None] = {
 }
 
 
+def _validate_namespace(ns: str) -> str:
+    import re
+
+    pattern = settings.namespace_pattern
+    if not re.match(pattern, ns):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid namespace")
+    return ns
+
+
+def get_reranker_for_namespace(namespace: str | None) -> Reranker:
+    # Treat None or empty string as default without validation
+    ns = (namespace or "").strip()
+    if not ns:
+        ns = settings.default_namespace
+    else:
+        ns = _validate_namespace(ns)
+    with _namespace_lock:
+        rk = _rerankers.get(ns)
+        if rk is None:
+            rk = Reranker(settings=settings)  # shared settings for now
+            _rerankers[ns] = rk
+        return rk
+
+
 def _run_startup_purge() -> None:
     if settings.storage_retention_sweep_on_start:
         try:
             if settings.storage_retention_days and settings.storage_retention_days > 0:
                 retention_seconds = settings.storage_retention_days * 86400.0
-                reranker.narr.purge_if_stale(retention_seconds)
-                reranker.pher.purge_older_than(retention_seconds)
+                with _namespace_lock:
+                    for rk in _rerankers.values():
+                        rk.narr.purge_if_stale(retention_seconds)
+                        rk.pher.purge_older_than(retention_seconds)
                 _retention_metrics["last_startup_purge_ts"] = time.time()
         except Exception:  # pragma: no cover
             pass
@@ -85,7 +119,7 @@ async def add_version_header(request: Request, call_next):  # type: ignore[overr
     # Back-compat alias (documented as deprecated once versioning policy matures)
     response.headers["X-API-Version"] = settings.api_version
     return response
-reranker = Reranker(settings=settings)
+
 
 _feedback_cache: OrderedDict[str, list[ScoredDocument]] = OrderedDict()
 _feedback_lock = threading.Lock()
@@ -103,15 +137,14 @@ def _retention_sweep_loop() -> None:
             if retention_days is None or retention_days <= 0:
                 continue
             retention_seconds = retention_days * 86400.0
-            # Purge stale narrative & pheromones via underlying stores
-            reranker.narr.purge_if_stale(retention_seconds)
-            reranker.pher.purge_older_than(retention_seconds)
+            with _namespace_lock:
+                for rk in _rerankers.values():
+                    rk.narr.purge_if_stale(retention_seconds)
+                    rk.pher.purge_older_than(retention_seconds)
             _retention_metrics["last_sweep_ts"] = time.time()
             _retention_metrics["sweep_count"] = int(_retention_metrics.get("sweep_count", 0)) + 1
         except Exception:  # pragma: no cover - defensive
             pass
-
-"""Startup/shutdown handled by lifespan context above (legacy on_event removed)."""
 
 
 def _build_gating_overrides(req: RerankRequest) -> dict[str, object] | None:
@@ -221,10 +254,12 @@ async def rerank(
     api_ok: None = Depends(_require_api_key),
     rate_ok: None = Depends(_rate_limit),
     use_cr: bool | None = Query(default=None, description="Override CR toggle"),
+    namespace: str | None = Header(default=None, alias=settings.namespace_header),
 ) -> JSONResponse:
-    previous_cr = reranker.settings.cr.on
+    rk = get_reranker_for_namespace(namespace)
+    previous_cr = rk.settings.cr.on
     if use_cr is not None:
-        reranker.settings.cr.on = use_cr
+        rk.settings.cr.on = use_cr
     _validate_request(req)
     start = time.perf_counter()
     status_label = "success"
@@ -234,8 +269,8 @@ async def rerank(
         if req.query_embedding is not None:
             q = np.array(req.query_embedding, dtype=np.float32)
         else:
-            q = reranker.encode_query(req.query)
-        scored = reranker.score(
+            q = rk.encode_query(req.query)
+        scored = rk.score(
             q,
             list(req.documents),
             mmr_lambda=req.mmr_lambda,
@@ -268,7 +303,7 @@ async def rerank(
             duration=time.perf_counter() - start,
             doc_count=len(req.documents),
         )
-        reranker.settings.cr.on = previous_cr
+        rk.settings.cr.on = previous_cr
 
 
 @app.post("/rerank/batch", response_model=list[BatchRerankResponseItem])
@@ -277,10 +312,12 @@ async def rerank_batch(
     api_ok: None = Depends(_require_api_key),
     rate_ok: None = Depends(_rate_limit),
     use_cr: bool | None = Query(default=None, description="Override CR toggle"),
+    namespace: str | None = Header(default=None, alias=settings.namespace_header),
 ) -> JSONResponse:
-    previous_cr = reranker.settings.cr.on
+    rk = get_reranker_for_namespace(namespace)
+    previous_cr = rk.settings.cr.on
     if use_cr is not None:
-        reranker.settings.cr.on = use_cr
+        rk.settings.cr.on = use_cr
     if len(batch) > settings.max_batch_size:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -299,8 +336,8 @@ async def rerank_batch(
             if req.query_embedding is not None:
                 q = np.array(req.query_embedding, dtype=np.float32)
             else:
-                q = reranker.encode_query(req.query)
-            scored = reranker.score(
+                q = rk.encode_query(req.query)
+            scored = rk.score(
                 q,
                 list(req.documents),
                 mmr_lambda=req.mmr_lambda,
@@ -336,7 +373,7 @@ async def rerank_batch(
             duration=time.perf_counter() - start,
             doc_count=total_docs,
         )
-        reranker.settings.cr.on = previous_cr
+        rk.settings.cr.on = previous_cr
 
 
 class FeedbackRequest(Feedback):
@@ -349,6 +386,7 @@ async def feedback(
     fb: FeedbackRequest,
     api_ok: None = Depends(_require_api_key),
     rate_ok: None = Depends(_rate_limit),
+    namespace: str | None = Header(default=None, alias=settings.namespace_header),
 ) -> dict[str, str]:
     if not fb.selected_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="selected_ids required")
@@ -358,7 +396,8 @@ async def feedback(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="One or more selected_ids are unknown or expired",
         )
-    reranker.update_feedback(
+    rk = get_reranker_for_namespace(namespace)
+    rk.update_feedback(
         fb.selected_ids,
         doc_map=doc_map,
         success=fb.success,
@@ -403,8 +442,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
         status.HTTP_401_UNAUTHORIZED: "UNAUTHORIZED",
         status.HTTP_404_NOT_FOUND: "NOT_FOUND",
-    status.HTTP_413_CONTENT_TOO_LARGE: "ENTITY_TOO_LARGE",
-    status.HTTP_422_UNPROCESSABLE_CONTENT: "VALIDATION_ERROR",
+        status.HTTP_413_CONTENT_TOO_LARGE: "ENTITY_TOO_LARGE",
+        status.HTTP_422_UNPROCESSABLE_CONTENT: "VALIDATION_ERROR",
         status.HTTP_429_TOO_MANY_REQUESTS: "RATE_LIMITED",
         status.HTTP_500_INTERNAL_SERVER_ERROR: "INTERNAL_ERROR",
     }

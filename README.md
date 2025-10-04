@@ -115,66 +115,57 @@ Gating plugs in before narrative, pheromone, and MMR scoring—so downstream mem
 
 ---
 
-## Integrations & interfaces
+## Multi-tenancy & namespaces
 
-- **REST API** (`uvicorn neuralcache.api.server:app`) with `/rerank`, `/feedback`, `/metrics`, and `/healthz` endpoints.
-- **Plus API** (`uvicorn neuralcache.api.server_plus:app`) adds `/rerank/batch`, Prometheus `/metrics`, and mounts the legacy routes under `/v1`.
-- All responses include `X-NeuralCache-API-Version` (and temporary alias `X-API-Version`) so clients can log and assert expected contract versions. See `docs/VERSIONING.md` for the policy.
-- **CLI** (`neuralcache "<query>" docs.jsonl --top-k 5`) for quick experiments and scripting.
-- **LangChain adapter** (`pip install "neuralcache[adapters]"`): `from neuralcache.adapters import NeuralCacheLangChainReranker`
-- **LlamaIndex adapter** (`pip install "neuralcache[adapters]"`): `from neuralcache.adapters import NeuralCacheLlamaIndexReranker`
+NeuralCache now supports lightweight logical isolation using a namespace header:
 
-See [`examples/quickstart.py`](examples/quickstart.py) for an end-to-end script.
+```
+X-NeuralCache-Namespace: tenantA
+```
 
----
+If omitted, the `default` namespace is used. Narrative + pheromone feedback effects do not bleed across namespaces. See `MULTITENANCY.md` for details, limitations (no eviction yet, shared persistence), and roadmap.
 
-## Feedback API: closing the loop
+| Setting | Purpose | Default |
+|---------|---------|---------|
+| `NEURALCACHE_NAMESPACE_HEADER` | Header key to read namespace | `X-NeuralCache-Namespace` |
+| `NEURALCACHE_DEFAULT_NAMESPACE` | Fallback namespace when header missing | `default` |
+| `NEURALCACHE_NAMESPACE_PATTERN` | Validation regex (400 on mismatch) | `^[a-zA-Z0-9_.-]{1,64}$` |
 
-Send successful reranks back to NeuralCache so the narrative EMA and pheromone
-signals keep learning:
+Invalid namespaces return a standardized error envelope:
 
-```http
-POST /feedback
-Content-Type: application/json
-
+```json
 {
-  "query": "How do I rotate API keys?",
-  "selected_ids": ["doc-42", "doc-71"],
-  "success": 0.9,
-  "best_doc_text": "Rotate keys via the dashboard > API tokens",
-  "best_doc_embedding": [0.01, 0.32, -0.55, ...]
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Invalid namespace",
+    "detail": null
+  }
 }
 ```
 
-- `selected_ids` **must** match the `id` values returned by `/rerank`. The API
-  rejects unknown IDs to prevent stale writes.
-- `success` scores the overall outcome (`1.0` for complete resolution, `0.0`
-  for failure). Values below `settings.narrative_success_gate` are ignored for
-  narrative updates but still count toward pheromone decay.
-- `best_doc_text`/`best_doc_embedding` are optional hints that let the reranker
-  update the narrative vector even when a caller reformats the answer before
-  returning it to the user.
+---
 
-On success the endpoint responds with `{"status": "ok"}`.
+## Standardized error envelopes
 
-Tip: throttle feedback submissions with a short debounce window (e.g., only send
-feedback after end-users click “helpful”) to avoid promoting documents for noisy
-sessions.
+All errors (including validation) resolve to a stable shape documented in `docs/ERROR_ENVELOPES.md`:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Validation failed",
+    "detail": [ { "loc": ["body","query"], "msg": "Field required" } ]
+  }
+}
+```
+
+Common codes: `BAD_REQUEST`, `UNAUTHORIZED`, `NOT_FOUND`, `ENTITY_TOO_LARGE`, `VALIDATION_ERROR`, `RATE_LIMITED`, `INTERNAL_ERROR`.
 
 ---
 
-## Privacy & retention tips
+## Privacy & data handling
 
-- Set `NEURALCACHE_STORAGE_PERSISTENCE_ENABLED=false` to run fully in-memory. Narrative
-  vectors and pheromones reset on process restart and never touch disk.
-- Configure `NEURALCACHE_STORAGE_RETENTION_DAYS` (e.g., `7`) to purge pheromones and
-  narrative state older than the retention window on startup. SQLite purges directly
-  via `metadata`/`pheromones`, and the JSON fallback trims files in place.
-- Rotate SQLite files regularly or place them on encrypted storage. Review
-  [`SECURITY.md`](SECURITY.md) for reporting procedures and deployment guardrails.
-
-These controls let you scope how long user-derived signals persist while still
-benefiting from adaptive reranking.
+A concise operator playbook for data classification, retention, and namespace isolation is available in `PRIVACY.md`. Before production, review both `PRIVACY.md` and `SECURITY.md` and set appropriate retention and auth settings.
 
 ---
 
@@ -201,6 +192,9 @@ benefiting from adaptive reranking.
 | `NEURALCACHE_DETERMINISTIC_SEED` | Seed used when deterministic mode is enabled | `1337` |
 | `NEURALCACHE_EPSILON` | Override ε-greedy exploration rate (0-1). Ignored when deterministic. | _unset_ |
 | `NEURALCACHE_MMR_LAMBDA_DEFAULT` | Default MMR lambda when request omits/nulls `mmr_lambda` | `0.5` |
+| `NEURALCACHE_NAMESPACE_HEADER` | Header key to read namespace | `X-NeuralCache-Namespace` |
+| `NEURALCACHE_DEFAULT_NAMESPACE` | Fallback namespace when header missing | `default` |
+| `NEURALCACHE_NAMESPACE_PATTERN` | Validation regex (400 on mismatch) | `^[a-zA-Z0-9_.-]{1,64}$` |
 
 Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation. `NEURALCACHE_EPSILON` (when set) takes precedence over `epsilon_greedy` setting unless deterministic mode is active. `NEURALCACHE_MMR_LAMBDA_DEFAULT` supplies fallback diversity weighting when omitted.
 
