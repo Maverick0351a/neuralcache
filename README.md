@@ -78,6 +78,7 @@ uvicorn neuralcache.api.server_plus:app --port 8081 --reload
 - **Plus API** adds `/rerank/batch` and Prometheus-ready `/metrics` endpoints when you run `uvicorn neuralcache.api.server_plus:app` (install the `neuralcache[ops]` extra for dependencies).
 - **SQLite persistence out of the box.** `neuralcache.storage.sqlite_state.SQLiteState` keeps narrative + pheromone state durable across workers without JSON file juggling.
 - **Cognitive gating** right-sizes the rerank set on the fly, trimming obvious non-starters to save downstream tokens without losing recall.
+- **Transparent scoring spec** documented in `docs/SCORING_MODEL.md` for auditability and reproducible benchmarks.
 
 ### Use cases
 
