@@ -68,6 +68,26 @@ class RerankDebug(BaseModel):
     gating: dict[str, Any] | None = None
 
 
+class ErrorInfo(BaseModel):
+    code: str
+    message: str
+    detail: Any | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorInfo
+
+
+class RerankResponse(BaseModel):
+    results: list[ScoredDocument]
+    debug: RerankDebug | None = None
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class BatchRerankResponseItem(RerankResponse):
+    pass
+
+
 class Feedback(BaseModel):
     query: str
     selected_ids: list[str]

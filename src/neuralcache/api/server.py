@@ -6,13 +6,23 @@ from collections import OrderedDict, deque
 from typing import Any
 
 import numpy as np
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status, Request
 from fastapi.responses import JSONResponse
 
 from ..config import Settings
 from ..metrics import latest_metrics, metrics_enabled, observe_rerank, record_feedback
 from ..rerank import Reranker
-from ..types import Document, Feedback, RerankDebug, RerankRequest, ScoredDocument
+from ..types import (
+    BatchRerankResponseItem,
+    Document,
+    ErrorInfo,
+    ErrorResponse,
+    Feedback,
+    RerankDebug,
+    RerankRequest,
+    RerankResponse,
+    ScoredDocument,
+)
 
 settings = Settings()
 app = FastAPI(title=settings.api_title, version=settings.api_version)
@@ -125,7 +135,7 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/rerank")
+@app.post("/rerank", response_model=RerankResponse)
 async def rerank(
     req: RerankRequest,
     api_ok: None = Depends(_require_api_key),
@@ -157,7 +167,9 @@ async def rerank(
         _remember_scored(limited)
         payload = [doc.model_dump() for doc in limited]
         debug_model = RerankDebug(gating=_extract_gating_debug(debug_payload))
-        return JSONResponse({"results": payload, "debug": debug_model.model_dump()})
+        return JSONResponse(
+            RerankResponse(results=[ScoredDocument(**doc) for doc in payload], debug=debug_model).model_dump()
+        )
     except HTTPException:
         status_label = "error"
         raise
@@ -174,7 +186,7 @@ async def rerank(
         reranker.settings.cr.on = previous_cr
 
 
-@app.post("/rerank/batch")
+@app.post("/rerank/batch", response_model=list[BatchRerankResponseItem])
 async def rerank_batch(
     batch: list[RerankRequest],
     api_ok: None = Depends(_require_api_key),
@@ -215,7 +227,11 @@ async def rerank_batch(
             _remember_scored(limited)
             payload = [doc.model_dump() for doc in limited]
             debug_model = RerankDebug(gating=_extract_gating_debug(debug_payload))
-            results.append({"results": payload, "debug": debug_model.model_dump()})
+            results.append(
+                BatchRerankResponseItem(
+                    results=[ScoredDocument(**doc) for doc in payload], debug=debug_model
+                ).model_dump()
+            )
         return JSONResponse(results)
     except HTTPException:
         status_label = "error"
@@ -277,3 +293,26 @@ async def metrics(
         )
     content_type, payload = rendered
     return Response(content=payload, media_type=content_type)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:  # type: ignore[override]
+    # Map status_code to stable error code strings
+    code_map = {
+        status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
+        status.HTTP_401_UNAUTHORIZED: "UNAUTHORIZED",
+        status.HTTP_404_NOT_FOUND: "NOT_FOUND",
+        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: "ENTITY_TOO_LARGE",
+        status.HTTP_422_UNPROCESSABLE_ENTITY: "VALIDATION_ERROR",
+        status.HTTP_429_TOO_MANY_REQUESTS: "RATE_LIMITED",
+        status.HTTP_500_INTERNAL_SERVER_ERROR: "INTERNAL_ERROR",
+    }
+    code = code_map.get(exc.status_code, "ERROR")
+    body = ErrorResponse(error=ErrorInfo(code=code, message=str(exc.detail), detail=None))
+    return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:  # pragma: no cover
+    body = ErrorResponse(error=ErrorInfo(code="INTERNAL_ERROR", message="Unhandled error", detail=None))
+    return JSONResponse(status_code=500, content=body.model_dump())
