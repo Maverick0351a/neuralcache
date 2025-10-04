@@ -119,6 +119,7 @@ Gating plugs in before narrative, pheromone, and MMR scoring—so downstream mem
 
 - **REST API** (`uvicorn neuralcache.api.server:app`) with `/rerank`, `/feedback`, `/metrics`, and `/healthz` endpoints.
 - **Plus API** (`uvicorn neuralcache.api.server_plus:app`) adds `/rerank/batch`, Prometheus `/metrics`, and mounts the legacy routes under `/v1`.
+- All responses include `X-NeuralCache-API-Version` (and temporary alias `X-API-Version`) so clients can log and assert expected contract versions. See `docs/VERSIONING.md` for the policy.
 - **CLI** (`neuralcache "<query>" docs.jsonl --top-k 5`) for quick experiments and scripting.
 - **LangChain adapter** (`pip install "neuralcache[adapters]"`): `from neuralcache.adapters import NeuralCacheLangChainReranker`
 - **LlamaIndex adapter** (`pip install "neuralcache[adapters]"`): `from neuralcache.adapters import NeuralCacheLlamaIndexReranker`

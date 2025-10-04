@@ -26,6 +26,16 @@ from ..types import (
 
 settings = Settings()
 app = FastAPI(title=settings.api_title, version=settings.api_version)
+
+
+@app.middleware("http")
+async def add_version_header(request: Request, call_next):  # type: ignore[override]
+    response = await call_next(request)
+    # Canonical header
+    response.headers["X-NeuralCache-API-Version"] = settings.api_version
+    # Back-compat alias (documented as deprecated once versioning policy matures)
+    response.headers["X-API-Version"] = settings.api_version
+    return response
 reranker = Reranker(settings=settings)
 
 _feedback_cache: OrderedDict[str, list[ScoredDocument]] = OrderedDict()

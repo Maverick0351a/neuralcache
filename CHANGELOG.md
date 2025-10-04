@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file. The format 
 - Structured API success + error envelopes with standardized error codes (see README)
 - Scoring pipeline specification (`docs/SCORING_MODEL.md`) detailing dense, narrative, pheromone, MMR, and exploration fusion formula
 - Sample evaluation dataset (`data/sample_eval.jsonl`) for quick Context-Use@K smoke tests
+- Response versioning headers (`X-NeuralCache-API-Version` + compatibility alias) and initial versioning policy doc (`docs/VERSIONING.md`)
 
 ### Changed
 - Build bootstrap hardening: enforce safe pip range excluding 25.2 (GHSA-4xh5-x5gv-qwph) and updated setuptools minimum
