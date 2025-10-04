@@ -11,6 +11,7 @@
 [![CodeQL](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml/badge.svg)](https://github.com/Maverick0351a/neuralcache/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Maverick0351a/neuralcache?style=social)](https://github.com/Maverick0351a/neuralcache/stargazers)
+[![Coverage](https://img.shields.io/badge/coverage-67%25-yellow)](./coverage-policy)
 
 NeuralCache is a lightweight reranker for RAG pipelines that *actually remembers what helped*. It blends dense semantic similarity with a narrative memory of past wins and stigmergic pheromones that reward helpful passages while decaying stale ones—then spices in MMR diversity and ε-greedy exploration. The result: more relevant context for your LLM without rebuilding your stack.
 
@@ -311,11 +312,12 @@ Have ideas? [Open an issue](https://github.com/Maverick0351a/neuralcache/issues/
 ```bash
 pip install -e .[dev,test]
 pre-commit install
-ruff check && mypy && pytest
+ruff check && mypy && pytest --cov=neuralcache --cov-report=term-missing
 ```
 
 - Look for [good first issues](https://github.com/Maverick0351a/neuralcache/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 - Add test coverage for user-visible changes.
+- Coverage gate currently enforces >=67%. We intend to ratchet this to 70%+ after adding deterministic mode & retention sweep tests.
 - PRs with docs, demos, and eval improvements are extra appreciated.
 
 Optionally, join the discussion in **#neuralcache** on Discord (coming soon—watch this space).

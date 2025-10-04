@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file. The format 
 - Build bootstrap hardening: enforce safe pip range excluding 25.2 (GHSA-4xh5-x5gv-qwph) and updated setuptools minimum
 - CI workflow now upgrades both pip and setuptools prior to installation; pip-audit runs post-install
 - Broadened dependency ranges (FastAPI, Starlette, Uvicorn) to reduce upgrade churn while retaining safety bounds
+- Introduced initial coverage gate (CI fails below 67%) with plan to ratchet upward in subsequent releases
 
 ### Fixed
 - Prevent accidental install of vulnerable pip version 25.2 by pinning `<25.2`

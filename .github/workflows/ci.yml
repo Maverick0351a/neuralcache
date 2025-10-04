@@ -43,8 +43,8 @@ jobs:
       - name: Type-check (mypy)
         run: mypy src
 
-      - name: Pytest
-        run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml
+      - name: Pytest (with coverage gate)
+        run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml --cov-fail-under=67
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
