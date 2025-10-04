@@ -201,8 +201,9 @@ benefiting from adaptive reranking.
 | `NEURALCACHE_DETERMINISTIC` | Force deterministic reranks (seed RNG, disable exploration) | `false` |
 | `NEURALCACHE_DETERMINISTIC_SEED` | Seed used when deterministic mode is enabled | `1337` |
 | `NEURALCACHE_EPSILON` | Override ε-greedy exploration rate (0-1). Ignored when deterministic. | _unset_ |
+| `NEURALCACHE_MMR_LAMBDA_DEFAULT` | Default MMR lambda when request omits/nulls `mmr_lambda` | `0.5` |
 
-Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation. `NEURALCACHE_EPSILON` (when set) takes precedence over `epsilon_greedy` setting unless deterministic mode is active.
+Adjust everything via `.env`, environment variables, or direct `Settings(...)` instantiation. `NEURALCACHE_EPSILON` (when set) takes precedence over `epsilon_greedy` setting unless deterministic mode is active. `NEURALCACHE_MMR_LAMBDA_DEFAULT` supplies fallback diversity weighting when omitted.
 
 Persistence happens automatically using SQLite (or JSON fallback) so narrative and pheromone stores survive restarts. Point `NEURALCACHE_STORAGE_DIR` at shared storage for multi-worker deployments, or import `SQLiteState` directly if you need to wire the persistence layer into an existing app container. Under the hood the SQLite state:
 
@@ -545,3 +546,18 @@ updates:
 ## Support the project
 
 If NeuralCache saves you time, consider starring the repo or sharing a demo with the community. Contributions, bug reports, and evaluation results are the best way to help the project grow.
+
+---
+
+### Debug envelope fields
+
+Each `/rerank` response may include a `debug` object (structure stable across patch releases):
+
+| Field | Description |
+|-------|-------------|
+| `gating` | Cognitive gating decision telemetry (mode, uncertainty, counts) |
+| `deterministic` | True when deterministic mode is active (exploration disabled) |
+| `epsilon_used` | Effective epsilon after env override & deterministic suppression |
+| `mmr_lambda_used` | Final MMR lambda applied (request value clamped or default) |
+
+Use this for audit logs or offline evaluation dashboards. Avoid parsing internal sub-keys of `gating` beyond those documented—future versions may extend it.

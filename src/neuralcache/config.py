@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     weight_pheromone: float = 0.3
     weight_diversity: float = 0.2  # used in MMR
     epsilon_greedy: float = 0.05
+    mmr_lambda_default: float = 0.5
     deterministic: bool = False
     deterministic_seed: int = 1337
 

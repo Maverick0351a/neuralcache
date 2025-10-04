@@ -159,7 +159,7 @@ class Reranker:
         self,
         query_embedding: np.ndarray,
         docs: list[Document],
-        mmr_lambda: float = 0.5,
+        mmr_lambda: float | None = None,
         *,
         query_text: str | None = None,
         overrides: dict[str, object] | None = None,
@@ -295,7 +295,10 @@ class Reranker:
                     epsilon = val
             except ValueError:  # pragma: no cover
                 pass
-        mmr_lam = float(mmr_lambda if 0.0 <= mmr_lambda <= 1.0 else 0.5)
+        if mmr_lambda is None:
+            mmr_lam = float(self.settings.mmr_lambda_default)
+        else:
+            mmr_lam = float(mmr_lambda if 0.0 <= mmr_lambda <= 1.0 else self.settings.mmr_lambda_default)
 
         def mmr_gain(pos: int) -> float:
             if not mmr_selected_positions:
@@ -333,6 +336,7 @@ class Reranker:
         ]
         if debug is not None:
             debug["epsilon_used"] = float(epsilon)
+            debug["mmr_lambda_used"] = float(mmr_lam)
 
         # Record exposure for top-K
         self.pher.record_exposure([sd.id for sd in scored[: min(len(scored), 10)]])

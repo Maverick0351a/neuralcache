@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status, Request
+from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 
 from ..config import Settings
@@ -25,7 +26,54 @@ from ..types import (
 )
 
 settings = Settings()
-app = FastAPI(title=settings.api_title, version=settings.api_version)
+
+_sweeper_stop = threading.Event()
+_sweeper_thread: threading.Thread | None = None
+_retention_metrics: dict[str, float | int | None] = {
+    "last_sweep_ts": None,
+    "sweep_count": 0,
+    "last_startup_purge_ts": None,
+}
+
+
+def _run_startup_purge() -> None:
+    if settings.storage_retention_sweep_on_start:
+        try:
+            if settings.storage_retention_days and settings.storage_retention_days > 0:
+                retention_seconds = settings.storage_retention_days * 86400.0
+                reranker.narr.purge_if_stale(retention_seconds)
+                reranker.pher.purge_older_than(retention_seconds)
+                _retention_metrics["last_startup_purge_ts"] = time.time()
+        except Exception:  # pragma: no cover
+            pass
+
+
+def _start_sweeper() -> None:
+    if settings.storage_retention_sweep_interval_s > 0:
+        global _sweeper_thread
+        _sweeper_thread = threading.Thread(
+            target=_retention_sweep_loop, name="nc-retention-sweeper", daemon=True
+        )
+        _sweeper_thread.start()
+
+
+def _stop_sweeper() -> None:  # pragma: no cover
+    _sweeper_stop.set()
+    if _sweeper_thread and _sweeper_thread.is_alive():
+        _sweeper_thread.join(timeout=1.0)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):  # pragma: no cover - exercised indirectly via tests
+    _run_startup_purge()
+    _start_sweeper()
+    try:
+        yield
+    finally:
+        _stop_sweeper()
+
+
+app = FastAPI(title=settings.api_title, version=settings.api_version, lifespan=_lifespan)
 
 
 @app.middleware("http")
@@ -43,9 +91,6 @@ _feedback_lock = threading.Lock()
 _rate_lock = threading.Lock()
 _request_times: deque[float] = deque()
 
-_sweeper_stop = threading.Event()
-_sweeper_thread: threading.Thread | None = None
-
 
 def _retention_sweep_loop() -> None:
     interval = max(0.0, settings.storage_retention_sweep_interval_s)
@@ -60,34 +105,12 @@ def _retention_sweep_loop() -> None:
             # Purge stale narrative & pheromones via underlying stores
             reranker.narr.purge_if_stale(retention_seconds)
             reranker.pher.purge_older_than(retention_seconds)
+            _retention_metrics["last_sweep_ts"] = time.time()
+            _retention_metrics["sweep_count"] = int(_retention_metrics.get("sweep_count", 0)) + 1
         except Exception:  # pragma: no cover - defensive
             pass
 
-
-@app.on_event("startup")
-def _start_retention_sweeper() -> None:
-    if settings.storage_retention_sweep_on_start:
-        # Execute one purge cycle synchronously if configured
-        try:
-            if settings.storage_retention_days and settings.storage_retention_days > 0:
-                retention_seconds = settings.storage_retention_days * 86400.0
-                reranker.narr.purge_if_stale(retention_seconds)
-                reranker.pher.purge_older_than(retention_seconds)
-        except Exception:
-            pass
-    if settings.storage_retention_sweep_interval_s > 0:
-        global _sweeper_thread
-        _sweeper_thread = threading.Thread(
-            target=_retention_sweep_loop, name="nc-retention-sweeper", daemon=True
-        )
-        _sweeper_thread.start()
-
-
-@app.on_event("shutdown")
-def _stop_retention_sweeper() -> None:  # pragma: no cover
-    _sweeper_stop.set()
-    if _sweeper_thread and _sweeper_thread.is_alive():
-        _sweeper_thread.join(timeout=1.0)
+"""Startup/shutdown handled by lifespan context above (legacy on_event removed)."""
 
 
 def _build_gating_overrides(req: RerankRequest) -> dict[str, object] | None:
@@ -226,6 +249,7 @@ async def rerank(
             gating=_extract_gating_debug(debug_payload),
             deterministic=debug_payload.get("deterministic"),
             epsilon_used=debug_payload.get("epsilon_used"),
+            mmr_lambda_used=debug_payload.get("mmr_lambda_used"),
         )
         return JSONResponse(
             RerankResponse(results=[ScoredDocument(**doc) for doc in payload], debug=debug_model).model_dump()
@@ -290,6 +314,7 @@ async def rerank_batch(
                 gating=_extract_gating_debug(debug_payload),
                 deterministic=debug_payload.get("deterministic"),
                 epsilon_used=debug_payload.get("epsilon_used"),
+                mmr_lambda_used=debug_payload.get("mmr_lambda_used"),
             )
             results.append(
                 BatchRerankResponseItem(
@@ -357,6 +382,17 @@ async def metrics(
         )
     content_type, payload = rendered
     return Response(content=payload, media_type=content_type)
+
+
+@app.get("/metrics/retention")
+async def retention_metrics(api_ok: None = Depends(_require_api_key)) -> dict[str, object]:
+    if settings.storage_retention_days is None:
+        return {"retention_enabled": False}
+    return {
+        "retention_enabled": True,
+        "retention_days": settings.storage_retention_days,
+        **_retention_metrics,
+    }
 
 
 @app.exception_handler(HTTPException)

@@ -35,7 +35,7 @@ class RerankRequest(BaseModel):
     documents: list[Document]
     query_embedding: list[float] | None = None
     top_k: int = 10
-    mmr_lambda: float = 0.5
+    mmr_lambda: float | None = 0.5
     gating_mode: Literal["off", "auto", "on"] | None = None
     gating_threshold: float | None = None
     gating_min_candidates: int | None = None
@@ -51,7 +51,9 @@ class RerankRequest(BaseModel):
 
     @field_validator("mmr_lambda")
     @classmethod
-    def _clamp_mmr(cls, value: float) -> float:
+    def _clamp_mmr(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
         if value < 0.0:
             return 0.0
         if value > 1.0:
@@ -68,6 +70,7 @@ class RerankDebug(BaseModel):
     gating: dict[str, Any] | None = None
     deterministic: bool | None = None
     epsilon_used: float | None = None
+    mmr_lambda_used: float | None = None
 
 
 class ErrorInfo(BaseModel):
