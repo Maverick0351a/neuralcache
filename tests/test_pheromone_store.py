@@ -7,7 +7,11 @@ def test_pheromone_reinforce_and_decay():
     store.reinforce(["a"], reward=1.0)
     v_initial = store.get_bonus("a")
     assert v_initial > 0.0
-    time.sleep(1.1)
+    # Instead of sleeping, directly modify the timestamp to simulate elapsed time
+    rec = store.data["a"]
+    past = rec["t"] - 1.1  # pretend last update was 1.1s earlier
+    rec["t"] = past
+    store.data["a"] = rec
     v_later = store.get_bonus("a")
     assert v_later < v_initial  # decayed
 
