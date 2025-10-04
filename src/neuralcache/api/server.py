@@ -9,6 +9,7 @@ import numpy as np
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status, Request
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 from ..config import Settings
 from ..metrics import latest_metrics, metrics_enabled, observe_rerank, record_feedback
@@ -402,14 +403,37 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
         status.HTTP_401_UNAUTHORIZED: "UNAUTHORIZED",
         status.HTTP_404_NOT_FOUND: "NOT_FOUND",
-        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: "ENTITY_TOO_LARGE",
-        status.HTTP_422_UNPROCESSABLE_ENTITY: "VALIDATION_ERROR",
+    status.HTTP_413_CONTENT_TOO_LARGE: "ENTITY_TOO_LARGE",
+    status.HTTP_422_UNPROCESSABLE_CONTENT: "VALIDATION_ERROR",
         status.HTTP_429_TOO_MANY_REQUESTS: "RATE_LIMITED",
         status.HTTP_500_INTERNAL_SERVER_ERROR: "INTERNAL_ERROR",
     }
     code = code_map.get(exc.status_code, "ERROR")
     body = ErrorResponse(error=ErrorInfo(code=code, message=str(exc.detail), detail=None))
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:  # type: ignore[override]
+    def _sanitize(val):  # recursively coerce non-JSON-safe objects to strings
+        if isinstance(val, (str, int, float, type(None))):
+            return val
+        if isinstance(val, list):
+            return [_sanitize(v) for v in val]
+        if isinstance(val, dict):
+            return {str(k): _sanitize(v) for k, v in val.items()}
+        return str(val)
+
+    raw_errors = exc.errors()
+    serializable = [_sanitize(e) for e in raw_errors]
+    body = ErrorResponse(
+        error=ErrorInfo(
+            code="VALIDATION_ERROR", message="Validation failed", detail=serializable
+        )
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content=body.model_dump()
+    )
 
 
 @app.exception_handler(Exception)
