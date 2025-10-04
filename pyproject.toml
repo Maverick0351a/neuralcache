@@ -20,9 +20,11 @@ classifiers = [
 ]
 
 dependencies = [
-  "fastapi>=0.118,<0.119",
-  "starlette>=0.47.2,<0.49",
-  "uvicorn[standard]>=0.30,<0.31",
+  # Web framework & ASGI stack (broadened ranges for reduced churn while remaining below next
+  # potential breaking minor; tests + pip-audit gate safety)
+  "fastapi>=0.118,<0.121",
+  "starlette>=0.48,<0.51",
+  "uvicorn[standard]>=0.30,<0.32",
   "numpy>=1.26",
   "pydantic>=2.6",
   "pydantic-settings>=2.2",
