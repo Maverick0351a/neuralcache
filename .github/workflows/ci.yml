@@ -35,7 +35,7 @@ jobs:
       - name: Dependency audit (pip-audit)
         run: |
           python -m pip install pip-audit
-          pip-audit
+          pip-audit --skip-editable
 
       - name: Ruff (lint + format check)
         run: ruff check .
