@@ -24,7 +24,7 @@ dependencies = [
   # potential breaking minor; tests + pip-audit gate safety)
   "fastapi>=0.118,<0.121",
   "starlette>=0.48,<0.51",
-  "uvicorn[standard]>=0.30,<0.32",
+  "uvicorn[standard]>=0.30,<0.39",
   "numpy>=1.26",
   "pydantic>=2.6",
   "pydantic-settings>=2.2",
