@@ -48,7 +48,7 @@ jobs:
         run: pytest -q --maxfail=1 --disable-warnings --cov=neuralcache --cov-report=xml --cov-fail-under=89
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-xml-${{ matrix.python-version }}-${{ github.run_id }}
           path: coverage.xml
