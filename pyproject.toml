@@ -23,7 +23,7 @@ dependencies = [
   # Web framework & ASGI stack (broadened ranges for reduced churn while remaining below next
   # potential breaking minor; tests + pip-audit gate safety)
   "fastapi>=0.118,<0.121",
-  "starlette>=0.48,<0.51",
+  "starlette>=0.48,<0.53",
   "uvicorn[standard]>=0.30,<0.32",
   "numpy>=1.26",
   "pydantic>=2.6",
